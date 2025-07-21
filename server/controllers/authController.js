@@ -6,13 +6,18 @@ exports.register = async (req, res) => {
   try {
     console.log("🔁 Register route hit");
     console.log("Request body:", req.body);
-    const { name, email, password } = req.body;
+
+    const { name, email, password, preferences } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
 
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ message: "Email already registered" });
 
     const hashed = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email, password: hashed,preferences });
+    const user = await User.create({ name, email, password: hashed, preferences });
 
     console.log("✅ User created:", user);
 
@@ -22,7 +27,7 @@ exports.register = async (req, res) => {
 
     res.status(201).json({ token, user });
   } catch (err) {
-        console.error("❌ Registration error:", err);
+    console.error("❌ Registration error:", err);
     res.status(500).json({ message: "Error in registration", error: err.message });
   }
 };
