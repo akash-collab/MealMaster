@@ -153,7 +153,7 @@ Build a comprehensive meal planning application that enables users to:
 
 ### 1. Clone the Repository
 bash
-git clone https://github.com/akash-collab/MealMaster/tree/main/
+git clone (https://github.com/akash-collab/MealMaster.git)
 cd MealMaster_App
 
 ### 2. Install Dependencies
