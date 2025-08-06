@@ -6,16 +6,14 @@
 
 ## 🚀 Deploy Link
 
-🌐 **Live App**: [https://your-frontend-app.onrender.com](https://your-frontend-app.onrender.com)  
-🔧 **Backend API**: [https://your-backend-api.onrender.com](https://your-backend-api.onrender.com)
-
-> _Replace the above links with your actual Render deployment URLs._
+🌐 **Live App**: [https://your-frontend-app.onrender.com](https://mealmaster-frontend.onrender.com)  
+🔧 **Backend API**: [https://your-backend-api.onrender.com](https://mealmaster-7mpu.onrender.com)
 
 ---
 
 ## 🎥 Demo Video
 
-▶️ [Watch the Demo on YouTube](https://your-demo-video-link.com)
+▶️ [Watch the Demo on YouTube](https://youtu.be/QlWXn-ZTbuY)
 
 > _Link to a walkthrough/demo showing key features like registration, meal planner, recipe search, nutrition tracking, and AI suggestions._
 
@@ -172,7 +170,7 @@ MONGO_URI=your_mongo_connection_string
 JWT_SECRET=your_jwt_secret
 
 Frontend.env 
-VITE_API_BASE_URL=https://your-backend-api.onrender.com
+VITE_API_BASE_URL=https://mealmaster-7mpu.onrender.com
 
 Run the App Locally
 Start Backend
@@ -206,20 +204,18 @@ Route
 Use Postman to test endpoints:
 
 Route   Description
-Description POST /auth/register
-Register new user
-POST /auth/login
-User login
-GET /meals
-Fetch meals
-POST /meals
-Add a new meal
-GET /recipes
-Search recipes
-POST /planner
-Save weekly meal plan
-POST /ai/suggestions
-Get Gemini-powered meal ideas
+## 📮 API Endpoints
+
+| Method | Endpoint              | Description                         |
+|--------|-----------------------|-------------------------------------|
+| POST   | `/auth/register`      | Register a new user                 |
+| POST   | `/auth/login`         | Log in an existing user             |
+| GET    | `/meals`              | Fetch all meals for the user       |
+| POST   | `/meals`              | Add a new meal                      |
+| GET    | `/recipes`            | Search and retrieve recipes         |
+| POST   | `/planner`            | Save the weekly meal plan           |
+| POST   | `/ai/suggestions`     | Get AI-powered meal suggestions     |
+
 
 Future Improvements
 	•	AI chatbot meal planner
@@ -230,11 +226,6 @@ Future Improvements
 
 License
 
+
 This project is licensed under the MIT License.
 You are free to use, modify, and distribute it.
-
-
-
-
-
-
