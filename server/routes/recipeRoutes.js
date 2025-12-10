@@ -1,95 +1,120 @@
-const express = require("express");
+// server/routes/recipeRoutes.js
+import express from "express";
+import axios from "axios";
+
 const router = express.Router();
-const Recipe = require("../models/Recipe");
-const User = require("../models/User");
-const authMiddleware = require("../middleware/auth");
+const MEALDB_BASE = "https://www.themealdb.com/api/json/v1/1";
+const DRINKDB_BASE = "https://www.thecocktaildb.com/api/json/v1/1";
 
-// GET: Search recipes by ingredient, dietary preference, and meal type
-router.get("/", async (req, res) => {
-  const { ingredient, dietary, mealType } = req.query;
-  const filter = {};
+// 👉 curated IDs (MealDB)
+const CURATED_MEAL_IDS = [
+  "52771", // Arrabiata
+  "52807", // Butter Chicken
+  "52805", // Lamb Biryani
+  "52820", // Katsu Curry
+  "52855", // Pad Thai
+  "52844", // Lasagna
+  "52795", // Chicken Handi
+  "53065", // Sushi
+  "52834", // Tacos
+  "52982", // Carbonara
+  "52819", // Beef Fried Rice
+  "52796", // Teriyaki Chicken Casserole
+];
 
-  if (ingredient) {
-    filter.ingredients = { $regex: ingredient, $options: "i" };
-  }
-  if (dietary) {
-    filter.dietaryPreferences = dietary;
-  }
-  if (mealType) {
-    filter.mealType = mealType;
-  }
+// 👉 curated drink IDs (CocktailDB)
+const CURATED_DRINK_IDS = [
+  "11000",  // Mojito
+  "11007",  // Margarita
+  "12776",  // Iced Coffee
+  "17207",  // Pina Colada
+  "178366", // Long Island Iced Tea
+  "12770",  // Strawberry Shake
+];
 
+// 🔹 Search meals
+router.get("/search", async (req, res) => {
   try {
-    const recipes = await Recipe.find(filter);
-    res.json(recipes);
+    const { q } = req.query;
+    const response = await axios.get(`${MEALDB_BASE}/search.php?s=${q}`);
+    res.json(response.data);
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch recipes" });
+    console.error("Meal search error:", err);
+    res.status(500).json({ message: "Error searching meals" });
   }
 });
 
-// POST: Create new recipe with nutritional info
-router.post("/", async (req, res) => {
-  const {
-    name,
-    ingredients,
-    instructions,
-    mealType,
-    dietaryPreferences,
-    calories,
-    protein,
-    carbs,
-    fat,
-  } = req.body;
-
-  if (!name || !ingredients || !mealType || !calories) {
-    return res.status(400).json({ error: "Missing required fields" });
-  }
-
+// 🔹 Curated meals (minimal fields)
+router.get("/curated", async (_req, res) => {
   try {
-    const recipe = new Recipe({
-      name,
-      ingredients,
-      instructions,
-      mealType,
-      dietaryPreferences,
-      calories,
-      protein,
-      carbs,
-      fat,
-    });
+    const promises = CURATED_MEAL_IDS.map((id) =>
+      axios.get(`${MEALDB_BASE}/lookup.php?i=${id}`)
+    );
 
-    await recipe.save();
-    res.status(201).json(recipe);
+    const results = await Promise.all(promises);
+
+    const meals = results
+      .map((r) => r.data.meals?.[0])
+      .filter(Boolean)
+      .map((meal) => ({
+        id: meal.idMeal,
+        name: meal.strMeal,
+        thumbnail: meal.strMealThumb,
+      }));
+
+    res.json({ meals });
   } catch (err) {
-    res.status(400).json({ error: "Invalid recipe data" });
+    console.error("Curated meals error:", err);
+    res.status(500).json({ message: "Error fetching curated meals" });
   }
 });
 
-// POST: Add recipe to user's favorites
-router.post("/favorite", authMiddleware, async (req, res) => {
+// 🔹 Curated drinks (minimal fields)
+router.get("/drinks/curated", async (_req, res) => {
   try {
-    const { recipeId } = req.body;
-    const user = await User.findById(req.user.id);
+    const promises = CURATED_DRINK_IDS.map((id) =>
+      axios.get(`${DRINKDB_BASE}/lookup.php?i=${id}`)
+    );
 
-    if (!user.favorites.includes(recipeId)) {
-      user.favorites.push(recipeId);
-      await user.save();
-    }
+    const results = await Promise.all(promises);
 
-    res.json({ message: "Added to favorites" });
+    const drinks = results
+      .map((r) => r.data.drinks?.[0])
+      .filter(Boolean)
+      .map((drink) => ({
+        id: drink.idDrink,
+        name: drink.strDrink,
+        thumbnail: drink.strDrinkThumb,
+      }));
+
+    res.json({ drinks });
   } catch (err) {
-    res.status(500).json({ error: "Failed to save favorite" });
+    console.error("Curated drinks error:", err);
+    res.status(500).json({ message: "Error fetching curated drinks" });
   }
 });
 
-// GET: Get user's favorite recipes (populated)
-router.get("/favorites", authMiddleware, async (req, res) => {
+// 🔹 Random drink suggestion (for details page)
+router.get("/drinks/random", async (_req, res) => {
   try {
-    const user = await User.findById(req.user.id).populate("favorites");
-    res.json(user.favorites);
+    const response = await axios.get(`${DRINKDB_BASE}/random.php`);
+    res.json(response.data);
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch favorites" });
+    console.error("Drink error:", err);
+    res.status(500).json({ message: "Error fetching drink suggestion" });
   }
 });
 
-module.exports = router;
+// 🔹 Meal details (keep LAST so it doesn't swallow other routes)
+router.get("/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const response = await axios.get(`${MEALDB_BASE}/lookup.php?i=${id}`);
+    res.json(response.data);
+  } catch (err) {
+    console.error("Meal details error:", err);
+    res.status(500).json({ message: "Error fetching meal details" });
+  }
+});
+
+export default router;

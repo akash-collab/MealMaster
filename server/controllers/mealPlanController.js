@@ -1,41 +1,61 @@
-const MealPlan = require("../models/MealPlan");
+// server/controllers/mealPlanController.js
+import MealPlan from "../models/MealPlan.js";
 
-exports.saveMealPlan = async (req, res) => {
-  const userId = req.user.id;
-  const mealPlanObj = req.body.mealPlan;
-
+export const getMealPlan = async (req, res) => {
   try {
-    const planArray = Object.entries(mealPlanObj).map(([slot, meal]) => ({
-      slot,
-      meal,
-    }));
+    const userId = req.userId;
+    const { weekStart } = req.params;
 
-    const updated = await MealPlan.findOneAndUpdate(
-      { user: userId },
-      { plan: planArray },
-      { new: true, upsert: true }
-    );
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+      return res.status(400).json({ message: "Invalid weekStart date" });
+    }
 
-    res.json({ success: true });
+    const plan = await MealPlan.findOne({
+      user: userId,
+      weekStart, 
+    });
+
+    return res.json({ plan });
   } catch (err) {
-    console.error("Error saving meal plan:", err);
-    res.status(500).json({ error: "Failed to save meal plan" });
+    console.error("Get meal plan error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-exports.getMealPlan = async (req, res) => {
+export const saveMealPlan = async (req, res) => {
   try {
-    const doc = await MealPlan.findOne({ user: req.user.id });
-    if (!doc) return res.json({ mealPlan: {} });
+    const userId = req.userId;
+    const { weekStart } = req.params; 
+    const { days } = req.body;
 
-    const planObj = {};
-    doc.plan.forEach(({ slot, meal }) => {
-      planObj[slot] = meal;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+      return res.status(400).json({ message: "Invalid weekStart date" });
+    }
+
+    if (!days) {
+      return res.status(400).json({ message: "Days object is required" });
+    }
+
+    const existing = await MealPlan.findOne({
+      user: userId,
+      weekStart, 
     });
 
-    res.json({ mealPlan: planObj });
+    let plan;
+    if (existing) {
+      existing.days = days;
+      plan = await existing.save();
+    } else {
+      plan = await MealPlan.create({
+        user: userId,
+        weekStart,
+        days,
+      });
+    }
+
+    return res.json({ message: "Meal plan saved", plan });
   } catch (err) {
-    console.error("Error getting meal plan:", err);
-    res.status(500).json({ error: "Failed to fetch meal plan" });
+    console.error("Save meal plan error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

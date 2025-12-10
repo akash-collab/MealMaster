@@ -1,9 +1,15 @@
-const express = require("express");
+// server/routes/mealPlanRoutes.js
+import express from "express";
+import { protect } from "../middleware/authMiddleware.js";
+import {
+  getMealPlan,
+  saveMealPlan,
+} from "../controllers/mealPlanController.js";
+
 const router = express.Router();
-const { saveMealPlan, getMealPlan } = require("../controllers/mealPlanController");
-const auth = require("../middleware/auth");
 
-router.get("/", auth, getMealPlan);
-router.put("/", auth, saveMealPlan);
+// weekStart is "YYYY-MM-DD"
+router.get("/:weekStart", protect, getMealPlan);
+router.post("/:weekStart", protect, saveMealPlan);
 
-module.exports = router;
+export default router;
