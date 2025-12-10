@@ -9,8 +9,9 @@ import toast from "react-hot-toast";
 import { useAuthStore } from "../../store/authStore";
 import {
   fetchCommunityPost,
+  fetchCommunityComments,
   addComment,
-  reactToPost,
+  
 } from "../../services/communityService";
 import { useState } from "react";
 const EMOJI_OPTIONS = ["❤️", "🔥", "😋", "🤩", "👍", "👎"];
