@@ -9,13 +9,12 @@ const commentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Each reaction = which user, which emoji
 const reactionSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    emoji: { type: String, required: true }, // e.g. "❤️", "🔥"
+    emoji: { type: String, required: true },
   },
-  { _id: false }
+  { timestamps: true }
 );
 
 const communityRecipeSchema = new mongoose.Schema(
@@ -23,13 +22,11 @@ const communityRecipeSchema = new mongoose.Schema(
     title: { type: String, required: true },
     description: { type: String, required: true },
 
-    // Image stored in MongoDB as buffer
     image: {
       data: Buffer,
       contentType: String,
     },
 
-    // Optional external URL (if user pasted instead of upload)
     imageUrl: { type: String },
 
     ingredients: [String],
@@ -38,7 +35,6 @@ const communityRecipeSchema = new mongoose.Schema(
 
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
-    // ✅ NEW: emoji reactions
     reactions: [reactionSchema],
 
     comments: [commentSchema],
@@ -46,4 +42,5 @@ const communityRecipeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("CommunityRecipe", communityRecipeSchema);
+export default mongoose.models.CommunityRecipe ||
+  mongoose.model("CommunityRecipe", communityRecipeSchema);

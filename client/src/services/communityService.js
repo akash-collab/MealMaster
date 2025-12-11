@@ -7,7 +7,7 @@ const BASE_URL = `${import.meta.env.VITE_API_URL}/community`;
 export const fetchCommunityRecipes = async (sort = "trending") => {
   const res = await fetch(`${BASE_URL}?sort=${sort}`);
   if (!res.ok) throw new Error("Failed to load community recipes");
-  return res.json(); // { recipes }
+  return res.json();
 };
 
 // PUBLIC — single post
@@ -31,7 +31,6 @@ export const createCommunityRecipe = async (payload) => {
 
   formData.append("title", payload.title);
   formData.append("description", payload.description);
-
   if (payload.imageFile) {
     formData.append("image", payload.imageFile);
   } else if (payload.imageUrl) {
@@ -41,12 +40,8 @@ export const createCommunityRecipe = async (payload) => {
   (payload.ingredients || []).forEach((ing) =>
     formData.append("ingredients[]", ing)
   );
-  (payload.steps || []).forEach((s) =>
-    formData.append("steps[]", s)
-  );
-  (payload.tags || []).forEach((t) =>
-    formData.append("tags[]", t)
-  );
+  (payload.steps || []).forEach((s) => formData.append("steps[]", s));
+  (payload.tags || []).forEach((t) => formData.append("tags[]", t));
 
   const res = await fetch(BASE_URL, {
     method: "POST",
@@ -60,20 +55,7 @@ export const createCommunityRecipe = async (payload) => {
   return res.json(); // { recipe }
 };
 
-// PROTECTED — classic like toggle (backend /:id/like)
-export const toggleLike = async (id) => {
-  const token = useAuthStore.getState().accessToken;
 
-  const res = await fetch(`${BASE_URL}/${id}/like`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!res.ok) throw new Error("Failed to like recipe");
-  return res.json(); // { likesCount, liked }
-};
 
 // PROTECTED — add comment
 export const addComment = async ({ id, text }) => {
@@ -89,5 +71,24 @@ export const addComment = async ({ id, text }) => {
   });
 
   if (!res.ok) throw new Error("Failed to add comment");
+  return res.json(); 
+};
+
+// PROTECTED — react to post
+export const reactToPost = async ({ id, emoji }) => {
+  const token = useAuthStore.getState().accessToken;
+  const res = await fetch(`${BASE_URL}/${id}/react`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ emoji }),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(txt || "Failed to react to post");
+  }
   return res.json(); 
 };

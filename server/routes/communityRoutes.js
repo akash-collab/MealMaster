@@ -4,7 +4,7 @@ import {
   getCommunityRecipes,
   createCommunityRecipe,
   getCommunityRecipe,
-  reactToCommunityRecipe,
+  reactToPost,
   addComment,
   getComments,
   getCommunityImage,
@@ -22,7 +22,7 @@ router.get("/:id/image", getCommunityImage);
 
 // Protected actions
 router.post("/", protect, uploadImage.single("image"), createCommunityRecipe);
-router.post("/:id/react", protect, reactToCommunityRecipe);
+router.post("/:id/react", protect, reactToPost);
 router.post("/:id/comments", protect, addComment);
 
 export default router;
