@@ -1,3 +1,4 @@
+// server/models/User.js
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -8,10 +9,15 @@ const userSchema = new mongoose.Schema(
 
     password: { type: String },
 
-    avatar: { type: String },
+    avatar: {
+      data: Buffer,
+      contentType: String,
+    },
 
-    oauthProvider: { type: String }, 
+    oauthProvider: { type: String },
     oauthId: { type: String },
+
+    refreshToken: { type: String },
 
     dietPreferences: [String],
     allergies: [String],
@@ -37,4 +43,4 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("User", userSchema);
+export default mongoose.models.User || mongoose.model("User", userSchema);

@@ -5,14 +5,18 @@ import QueryProvider from "./providers/QueryProvider";
 import TokenRefresher from "./components/TokenRefresher";
 import { Toaster } from "react-hot-toast";
 import ThemeProvider from "./providers/ThemeProvider";
+import InitAuth from "./providers/InitAuth";
+
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ThemeProvider>
       <QueryProvider>
-        <TokenRefresher>
+        {/* <TokenRefresher> */}
+        <InitAuth>
           <AppRoutes />
+        </InitAuth>
           <Toaster
             position="top-center"
             toastOptions={{
@@ -25,7 +29,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               },
             }}
           />
-        </TokenRefresher>
+        {/* </TokenRefresher> */}
       </QueryProvider>
     </ThemeProvider>
   </React.StrictMode>

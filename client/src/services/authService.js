@@ -36,3 +36,16 @@ export const fetchMe = async (token) => {
 
   return res.json();
 };
+
+export const refreshAccessToken = async () => {
+  const res = await fetch(`${API_URL}/refresh`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    return { accessToken: null };
+  }
+
+  return res.json(); // { accessToken }
+};

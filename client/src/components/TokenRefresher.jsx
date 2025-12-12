@@ -1,4 +1,3 @@
-// client/src/components/TokenRefresher.jsx
 import { useEffect } from "react";
 import { useAuthStore } from "../store/authStore";
 
@@ -14,7 +13,9 @@ export default function TokenRefresher({ children }) {
 
       if (res.ok) {
         const data = await res.json();
-        setAccessToken(data.accessToken);
+        if (data.accessToken) {
+          setAccessToken(data.accessToken);
+        }
       }
     } catch (err) {
       console.log("Token refresh failed:", err);
@@ -22,8 +23,11 @@ export default function TokenRefresher({ children }) {
   };
 
   useEffect(() => {
+    // First refresh on load
     refreshToken();
-    const interval = setInterval(refreshToken, 600000);
+
+    // Every 10 minutes
+    const interval = setInterval(refreshToken, 10 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 

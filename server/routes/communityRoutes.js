@@ -11,11 +11,13 @@ import {
 } from "../controllers/communityController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { uploadImage } from "../middleware/uploadImage.js";
+import { getMyPosts } from "../controllers/mineController.js";
 
 const router = express.Router();
 
 // Public feed + public single post
 router.get("/", getCommunityRecipes);
+router.get("/mine", protect, getMyPosts);
 router.get("/:id", getCommunityRecipe);
 router.get("/:id/comments", getComments);
 router.get("/:id/image", getCommunityImage);
@@ -24,5 +26,4 @@ router.get("/:id/image", getCommunityImage);
 router.post("/", protect, uploadImage.single("image"), createCommunityRecipe);
 router.post("/:id/react", protect, reactToPost);
 router.post("/:id/comments", protect, addComment);
-
 export default router;

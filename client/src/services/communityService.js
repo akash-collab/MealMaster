@@ -92,3 +92,17 @@ export const reactToPost = async ({ id, emoji }) => {
   }
   return res.json(); 
 };
+export const getMyPosts = async () => {
+  const token = useAuthStore.getState().accessToken;
+
+  const res = await fetch(
+    `${import.meta.env.VITE_API_URL}/community/mine`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+    }
+  );
+
+  if (!res.ok) throw new Error("Failed to load your posts");
+  return res.json();
+};

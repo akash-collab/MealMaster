@@ -1,7 +1,7 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import RootLayout from "../layout/RootLayout";
 import DashboardLayout from "../layout/DashboardLayout";
 
+import AuthLayout from "../layout/AuthLayout";
 import Login from "../pages/auth/Login";
 import Register from "../pages/auth/Register";
 
@@ -20,16 +20,23 @@ import ProtectedRoute from "../components/ProtectedRoute";
 import Favorites from "../pages/dashboard/Favorites";
 import PublicRecipePage from "../pages/recipes/PublicRecipePage";
 
+import OAuthSuccess from "../pages/auth/OAuthSuccess";
+
 const router = createBrowserRouter([
+  // ---------- PUBLIC AUTH ROUTES ----------
   {
     path: "/",
-    element: <RootLayout />,
+    element: <AuthLayout />,        // <── wrap auth pages in AuthLayout
     children: [
-      { index: true, element: <Login /> },
+      { index: true, element: <Login /> },   // open on "/"
+      { path: "login", element: <Login /> }, // <── REQUIRED PATH
       { path: "register", element: <Register /> },
+      { path: "/oauth-success", element: <OAuthSuccess /> },
+
     ],
   },
 
+  // ---------- PROTECTED DASHBOARD ROUTES ----------
   {
     path: "/dashboard",
     element: (
@@ -48,6 +55,8 @@ const router = createBrowserRouter([
       { path: "favorites", element: <Favorites /> },
     ],
   },
+
+  // ---------- PUBLIC RECIPE PAGE ----------
   {
     path: "/p/:id",
     element: <PublicRecipePage />,

@@ -4,12 +4,19 @@ import cors from "cors";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import connectDB from "./config/db.js";
-import routes from "./routes/index.js";
+
+import indexRoutes from "./routes/index.js";
+import authRoutes from "./routes/authRoutes.js";
+import oauthRoutes from "./routes/oauthRoutes.js";
+
 import recipeRoutes from "./routes/recipeRoutes.js";
 import favoriteRoutes from "./routes/favoriteRoutes.js";
 import mealPlanRoutes from "./routes/mealPlanRoutes.js";
 import groceryRoutes from "./routes/groceryRoutes.js";
 import communityRoutes from "./routes/communityRoutes.js";
+import bookmarkRoutes from "./routes/bookmarkRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -18,26 +25,29 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors({
-  origin: "http://localhost:5173",
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
+// CORS
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+  })
+);
 
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));
 
-// ROUTES
+app.use("/api", indexRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/auth", oauthRoutes);
+app.use("/api/user", userRoutes);
 app.use("/api/recipes", recipeRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/grocery", groceryRoutes);
 app.use("/api/community", communityRoutes);
 app.use("/api/mealplan", mealPlanRoutes);
-app.use("/api", routes);
+app.use("/api/bookmarks", bookmarkRoutes);
 
-// PATH FIXES
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -47,8 +57,9 @@ if (!fs.existsSync(uploadsPath)) {
   fs.mkdirSync(uploadsPath, { recursive: true });
 }
 
-// Serve static uploads
+// Static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 const PORT = process.env.PORT || 8000;
 
 app.listen(PORT, () => {

@@ -15,6 +15,7 @@ import {
   fetchCommunityComments,
 } from "../../services/communityService";
 import { useAuthStore } from "../../store/authStore";
+import { toggleBookmark } from "../../services/bookmarkService";
 
 const EMOJI_OPTIONS = ["❤️", "😂", "😍", "🤤", "🔥", "😢"];
 
@@ -128,6 +129,7 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
   const user = useAuthStore((s) => s.user);
   const isLoggedIn = !!user;
   const queryClient = useQueryClient();
+  const [bookmarked, setBookmarked] = useState(recipe.isBookmarked || false);
 
   const [reactionCounts, setReactionCounts] = useState(recipe.reactionCounts || {});
   const totalReactions = Object.values(reactionCounts).reduce((s, v) => s + v, 0);
@@ -149,6 +151,14 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
     reactMutation.mutate({ id: recipe._id, emoji });
   };
 
+  const bookmarkMutation = useMutation({
+    mutationFn: () => toggleBookmark(recipe._id),
+    onSuccess: (data) => {
+      setBookmarked(data.isBookmarked);
+      queryClient.invalidateQueries(["community-recipes"]);
+    },
+    onError: () => toast.error("Failed to update bookmark"),
+  });
   return (
     <article
       onClick={() => onOpenPost && onOpenPost(recipe)}
@@ -164,20 +174,16 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
             <div className="text-[12px] text-muted-foreground">{new Date(recipe.createdAt).toLocaleDateString()}</div>
           </div>
         </div>
-
-        {/* small share icon on card header */}
         <button
           onClick={(e) => {
             e.stopPropagation();
-            const url = window.location.origin + `/p/${recipe._id}`;
-            navigator.clipboard.writeText(url).then(() => toast.success("Link copied!"));
+            bookmarkMutation.mutate();
           }}
-          className="text-sm text-muted-foreground hover:text-foreground"
+          className="text-xl hover:scale-110 transition"
         >
-          🔗
+          {bookmarked ? "⭐" : "☆"}
         </button>
       </div>
-
       {imgSrc && (
         <div role="button" onClick={() => onOpenPost(recipe)}>
           <img
@@ -192,7 +198,7 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
       <div className="p-4 space-y-2">
         <h3 className="font-semibold text-lg line-clamp-1">{recipe.title}</h3>
         <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{recipe.description}</p>
-        
+
         {recipe.tags?.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {recipe.tags.slice(0, 4).map((t) => (
@@ -237,6 +243,7 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
               <span className="text-lg">🔗</span>
               <span>Share</span>
             </button>
+
           </div>
 
           <span className="text-xs text-muted-foreground">Tap to open</span>
@@ -255,13 +262,14 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
   );
 }
 
-/* --------------- POST MODAL (unchanged) --------------- */
+/* --------------- POST MODAL --------------- */
 function PostModal({ recipe, onClose }) {
   const user = useAuthStore((s) => s.user);
   const isLoggedIn = !!user;
   const queryClient = useQueryClient();
 
   const [serverData, setServerData] = useState(null);
+  const [bookmarked, setBookmarked] = useState(recipe.isBookmarked || false);
 
   useQuery({
     queryKey: ["community-post", recipe._id],
@@ -271,6 +279,7 @@ function PostModal({ recipe, onClose }) {
     },
     onSuccess: (d) => setServerData(d),
     staleTime: 15000,
+    
   });
 
   const reactionCounts = serverData?.reactionCounts || recipe.reactionCounts;
@@ -305,6 +314,24 @@ function PostModal({ recipe, onClose }) {
     if (!text.trim()) return;
     commentMutation.mutate({ id: recipe._id, text });
   };
+
+  useEffect(() => {
+    if (serverData?.isBookmarked !== undefined) {
+      setBookmarked(serverData.isBookmarked);
+    }
+  }, [serverData?.isBookmarked]);
+
+  const bookmarkMutation = useMutation({
+    mutationFn: () => toggleBookmark(recipe._id),
+    onSuccess: (data) => {
+      // backend returns { isBookmarked: boolean }
+      setBookmarked(data.isBookmarked);
+
+      // update feed + modal queries
+      queryClient.invalidateQueries(["community-recipes"]);
+      queryClient.invalidateQueries(["community-post", recipe._id]);
+    },
+  });
 
   const imgSrc = recipe.imageUrl || `${import.meta.env.VITE_API_URL}/community/${recipe._id}/image`;
 
@@ -394,6 +421,15 @@ function PostModal({ recipe, onClose }) {
               }}
             >
               🔗 Share
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                bookmarkMutation.mutate();
+              }}
+              className="text-xl hover:scale-110 transition"
+            >
+              {bookmarked ? "⭐" : "☆"}
             </button>
           </div>
 
