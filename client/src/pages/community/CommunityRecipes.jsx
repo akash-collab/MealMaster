@@ -26,7 +26,7 @@ export default function CommunityRecipes() {
 
   const [sort, setSort] = useState("trending");
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [openPost, setOpenPost] = useState(null); // recipe object for modal
+  const [openPost, setOpenPost] = useState(null);
 
   const {
     data: feedData,

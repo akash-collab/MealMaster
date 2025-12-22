@@ -39,6 +39,11 @@ const userSchema = new mongoose.Schema(
     ],
 
     likedRecipes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Recipe" }],
+
+    onboardingCompleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

@@ -6,12 +6,15 @@ import {
   changePassword,
   updateAvatar,
   getAvatar,
+  saveOnboarding,
 } from "../controllers/userController.js";
 
 const router = express.Router();
 
 router.get("/avatar/:id", getAvatar);
-router.put("/me", protect, updateProfile);                     router.post("/change-password", protect, changePassword);      
-router.post("/avatar", protect, uploadImage.single("avatar"), updateAvatar); 
+router.put("/me", protect, updateProfile);
+router.post("/change-password", protect, changePassword);
+router.post("/onboarding", protect, saveOnboarding);
+router.post("/avatar", protect, uploadImage.single("avatar"), updateAvatar);
 
 export default router;

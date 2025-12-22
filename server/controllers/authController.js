@@ -39,18 +39,35 @@ async function sendTokens(user, res) {
 
 export const register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const {
+      name,
+      email,
+      password,
+      dietPreferences = [],
+      allergies = [],
+      cuisinePreferences = [],
+      calorieGoal = null,
+      macroGoals = null,
+    } = req.body;
+
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Name, email, and password are required" });
     }
+
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ message: "Email already in use" });
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await User.create({
-      name, email, password: hashedPassword,
+      name,
+      email,
+      password: hashedPassword,
+      dietPreferences,
+      allergies,
+      cuisinePreferences,
+      calorieGoal,
+      macroGoals,
     });
 
     return sendTokens(user, res);
@@ -138,8 +155,6 @@ export const logout = async (req, res) => {
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     });
 
-    // Optionally clear refresh token server-side if user is authenticated
-    // If you want to clear it for the current user:
     try {
       if (req.userId) {
         const user = await User.findById(req.userId);
@@ -161,9 +176,14 @@ export const logout = async (req, res) => {
 
 export const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("-password -refreshToken");
+    const user = await User.findById(req.userId).select("-password -refreshToken -avatar.data");
     if (!user) return res.status(404).json({ message: "User not found" });
-    res.json({ user });
+    res.json({
+      user: {
+        ...user.toObject(),
+        hasAvatar: Boolean(user.avatar?.contentType),
+      },
+    });
   } catch (error) {
     console.error("Get me error:", error);
     res.status(500).json({ message: "Server error" });

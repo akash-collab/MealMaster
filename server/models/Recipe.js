@@ -26,8 +26,11 @@ const recipeSchema = new mongoose.Schema(
       carbs: Number,
       fat: Number,
     },
-
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, 
+    nutritionGenerated: {
+      type: Boolean,
+      default: false,
+    },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );

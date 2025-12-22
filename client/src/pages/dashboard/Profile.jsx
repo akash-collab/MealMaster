@@ -161,15 +161,12 @@ export default function Profile() {
       return res.json();
     },
     onSuccess: (data) => {
-      const avatarPath = data?.avatar || data?.avatarUrl || "";
-      const avatar =
-        avatarPath && avatarPath.startsWith("http")
-          ? avatarPath
-          : `${import.meta.env.VITE_API_URL}${avatarPath}`;
-      // update local user
-      const cur = useAuthStore.getState().user || {};
-      const newUser = { ...cur, avatar:data.avatarUrl };
-      setUser(newUser);
+      if (user) {
+        setUser({
+          ...user,
+          hasAvatar: true,
+        });
+      }
       queryClient.invalidateQueries(["bookmarks", "my-posts", "community-recipes"]);
       toast.success("Avatar updated");
     },
@@ -231,9 +228,9 @@ export default function Profile() {
   }
 
   /* ------------------ RENDER ------------------ */
-  const avatarSrc = user?._id
-    ? `${import.meta.env.VITE_API_URL}/user/avatar/${user._id}`
-    : null;
+  const avatarSrc = user?._id && user?.hasAvatar
+  ? `${import.meta.env.VITE_API_URL}/user/avatar/${user._id}?t=${Date.now()}`
+  : null;
 
   return (
     <div className="p-6 max-w-6xl mx-auto text-foreground space-y-10">

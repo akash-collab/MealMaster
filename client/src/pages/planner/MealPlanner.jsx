@@ -1,12 +1,15 @@
-// client/src/pages/planner/MealPlanner.jsx
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+
 import { fetchMealPlan, saveMealPlan } from "../../services/mealPlanService";
 import { saveGroceryList } from "../../services/groceryService";
-import toast from "react-hot-toast";
+import { getRecipeNutritionCached } from "../../services/recipeService";
 import { extractIngredients } from "../../utils/ingredientParser";
 import { categorizeIngredient } from "../../utils/ingredientCategories";
 import { normalizeIngredientName } from "../../utils/ingredientNormalize";
+
+/* ================= CONSTANTS ================= */
 
 const DAYS = [
   "Monday",
@@ -17,17 +20,19 @@ const DAYS = [
   "Saturday",
   "Sunday",
 ];
+
 const MEALS = ["breakfast", "lunch", "dinner"];
+const DAILY_CAL_TARGET = 2000;
 
 const makeEmptyDays = () => {
   const empty = { breakfast: null, lunch: null, dinner: null };
-  return DAYS.reduce((obj, d) => ({ ...obj, [d]: { ...empty } }), {});
+  return DAYS.reduce((acc, d) => ({ ...acc, [d]: { ...empty } }), {});
 };
 
 const getCurrentWeekStart = () => {
   const today = new Date();
-  const weekday = today.getDay(); // 0 = Sun
-  const diff = (weekday === 0 ? -6 : 1) - weekday; // shift so Monday is first
+  const weekday = today.getDay();
+  const diff = (weekday === 0 ? -6 : 1) - weekday;
   return new Date(
     today.getFullYear(),
     today.getMonth(),
@@ -37,381 +42,370 @@ const getCurrentWeekStart = () => {
 
 const formatDate = (date) => date.toISOString().slice(0, 10);
 
+/* ================= SEARCH ================= */
+
 const searchRecipes = async (query) => {
-  if (!query) return { meals: [] };
+  if (!query || query.length < 3) return { meals: [] };
 
   const res = await fetch(
     `${import.meta.env.VITE_API_URL}/recipes/search?q=${encodeURIComponent(
       query
     )}`
   );
+
   if (!res.ok) throw new Error("Search failed");
   return res.json();
 };
 
-export const generateGroceryFromDays = async (days) => {
-  const map = new Map();
+/* ================= UI COMPONENTS ================= */
 
-  for (const day of Object.keys(days)) {
-    const d = days[day];
-    if (!d) continue;
+function CalorieRing({ value, target }) {
+  const percent = Math.min(100, Math.round((value / target) * 100));
+  const stroke = 10;
+  const radius = 44;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (percent / 100) * circumference;
 
-    for (const mealType of MEALS) {
-      const meal = d[mealType];
-      if (!meal?.recipeId) continue;
+  return (
+    <div className="flex items-center gap-4">
+      <svg width="110" height="110" className="-rotate-90">
+        <circle
+          cx="55"
+          cy="55"
+          r={radius}
+          stroke="currentColor"
+          strokeWidth={stroke}
+          className="text-muted"
+          fill="transparent"
+        />
+        <circle
+          cx="55"
+          cy="55"
+          r={radius}
+          stroke="url(#grad)"
+          strokeWidth={stroke}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          fill="transparent"
+          className="transition-all duration-700"
+        />
+        <defs>
+          <linearGradient id="grad">
+            <stop offset="0%" stopColor="#22c55e" />
+            <stop offset="100%" stopColor="#4ade80" />
+          </linearGradient>
+        </defs>
+      </svg>
 
-      const res = await fetch(
-        `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.recipeId}`
-      );
-      const data = await res.json();
-      if (!data.meals) continue;
+      <div>
+        <p className="text-xs text-muted-foreground">Today</p>
+        <p className="text-2xl font-bold">
+          {Math.round(value)}
+          <span className="text-sm text-muted-foreground">
+            /{target} kcal
+          </span>
+        </p>
+        <p className="text-xs text-muted-foreground">{percent}% of goal</p>
+      </div>
+    </div>
+  );
+}
 
-      const details = data.meals[0];
-      const ingredients = extractIngredients(details);
-
-      ingredients.forEach((ing) => {
-        const key = normalizeIngredientName(ing.name);
-        const category = categorizeIngredient(ing.name);
-
-        if (!map.has(key)) {
-          map.set(key, {
-            _id: crypto.randomUUID(),
-            name: ing.name,
-            quantity: ing.quantity,
-            unit: "",
-            checked: false,
-            category,
-          });
-        } else {
-          const existing = map.get(key);
-          existing.quantity += ` + ${ing.quantity}`;
-        }
-      });
-    }
-  }
-
-  return Array.from(map.values());
-};
+/* ================= MAIN ================= */
 
 export default function MealPlanner() {
   const queryClient = useQueryClient();
 
-  const weekStartDate = useMemo(getCurrentWeekStart, []);
-  const weekStartStr = useMemo(
-    () => formatDate(weekStartDate),
-    [weekStartDate]
-  );
-
+  const weekStart = useMemo(() => formatDate(getCurrentWeekStart()), []);
   const [days, setDays] = useState(makeEmptyDays());
   const [activeSlot, setActiveSlot] = useState(null);
+
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [aiMode, setAiMode] = useState(null);
 
-  // Fetch meal plan
+  /* -------- debounce search -------- */
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 400);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  /* ================= MEAL PLAN ================= */
+
   const { data, isLoading } = useQuery({
-    queryKey: ["mealplan", weekStartStr],
-    queryFn: () => fetchMealPlan(weekStartStr),
+    queryKey: ["mealplan", weekStart],
+    queryFn: () => fetchMealPlan(weekStart),
   });
 
-  // Hydrate from backend
   useEffect(() => {
     if (data?.plan?.days) {
-      setDays((prev) => ({ ...makeEmptyDays(), ...data.plan.days }));
+      setDays({ ...makeEmptyDays(), ...data.plan.days });
     }
   }, [data]);
 
-  // Search
-  const {
-    data: searchData,
-    isLoading: isSearching,
-    refetch: refetchSearch,
-  } = useQuery({
-    queryKey: ["planner-search", searchTerm],
-    queryFn: () => searchRecipes(searchTerm),
-    enabled: !!searchTerm,
+  /* ================= SEARCH RESULTS ================= */
+
+  const { data: searchData, isLoading: isSearching } = useQuery({
+    queryKey: ["planner-search", debouncedSearch],
+    queryFn: () => searchRecipes(debouncedSearch),
+    enabled: debouncedSearch.length >= 3,
   });
 
   const meals = searchData?.meals || [];
 
-  // Save meal plan
-  const saveMutation = useMutation({
-    mutationFn: () => saveMealPlan(weekStartStr, days),
-    onSuccess: () => {
-      queryClient.invalidateQueries(["mealplan", weekStartStr]);
-      toast.success("Meal plan saved! ✅");
+  /* ================= NUTRITION ================= */
+
+  const recipeIds = useMemo(() => {
+    const ids = new Set();
+    DAYS.forEach((d) =>
+      MEALS.forEach((m) => {
+        const r = days[d]?.[m];
+        if (r?.recipeId) ids.add(r.recipeId);
+      })
+    );
+    return [...ids];
+  }, [days]);
+
+  const nutritionQuery = useQuery({
+    queryKey: ["planner-nutrition", recipeIds],
+    enabled: recipeIds.length > 0,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        recipeIds.map(async (id) => {
+          const res = await getRecipeNutritionCached(id);
+          return [id, res.nutrition];
+        })
+      );
+      return Object.fromEntries(entries);
     },
-    onError: () => toast.error("Failed to save meal plan"),
   });
 
-  // Build grocery list
+  const totals = useMemo(() => {
+    let calories = 0, protein = 0, carbs = 0, fat = 0;
+    if (!nutritionQuery.data) return { calories, protein, carbs, fat };
+
+    DAYS.forEach((d) =>
+      MEALS.forEach((m) => {
+        const slot = days[d]?.[m];
+        const n = nutritionQuery.data[slot?.recipeId];
+        if (!n) return;
+        calories += n.calories || 0;
+        protein += n.protein || 0;
+        carbs += n.carbs || 0;
+        fat += n.fat || 0;
+      })
+    );
+
+    return { calories, protein, carbs, fat };
+  }, [days, nutritionQuery.data]);
+
+  /* ================= ACTIONS ================= */
+
+  const saveMutation = useMutation({
+    mutationFn: () => saveMealPlan(weekStart, days),
+    onSuccess: () => toast.success("Meal plan saved ✅"),
+  });
+
   const groceryMutation = useMutation({
     mutationFn: async () => {
-      const items = await generateGroceryFromDays(days);
-      return saveGroceryList(items);
+      const map = new Map();
+      for (const d of DAYS) {
+        for (const m of MEALS) {
+          const slot = days[d]?.[m];
+          if (!slot?.recipeId) continue;
+
+          const res = await fetch(
+            `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${slot.recipeId}`
+          );
+          const data = await res.json();
+          const ingredients = extractIngredients(data.meals[0]);
+
+          ingredients.forEach((ing) => {
+            const key = normalizeIngredientName(ing.name);
+            const cat = categorizeIngredient(ing.name);
+            if (!map.has(key)) {
+              map.set(key, {
+                _id: crypto.randomUUID(),
+                name: ing.name,
+                quantity: ing.quantity,
+                checked: false,
+                category: cat,
+              });
+            }
+          });
+        }
+      }
+      return saveGroceryList([...map.values()]);
     },
-    onSuccess: () => toast.success("Grocery list updated from ingredients! 🛒"),
-    onError: () => toast.error("Failed to generate grocery list"),
+    onSuccess: () => toast.success("Grocery list updated 🛒"),
   });
 
   const handleSelectRecipe = (meal) => {
     if (!activeSlot) return;
-
-    setDays((prev) => {
-      const updated = { ...prev };
-      updated[activeSlot.day] = {
+    setDays((prev) => ({
+      ...prev,
+      [activeSlot.day]: {
         ...prev[activeSlot.day],
         [activeSlot.mealType]: {
           recipeId: meal.idMeal,
           name: meal.strMeal,
           thumbnail: meal.strMealThumb,
         },
-      };
-      return updated;
-    });
-  };
-
-  const handleClearSlot = (day, mealType) => {
-    setDays((prev) => ({
-      ...prev,
-      [day]: { ...prev[day], [mealType]: null },
+      },
     }));
   };
 
-  const handleAiPreset = (mode) => {
-    setAiMode(mode);
+  if (isLoading) return <p className="p-6">Loading…</p>;
 
-    const presetMap = {
-      highProtein: "chicken",
-      quick: "pasta",
-      veg: "vegetarian",
-    };
-
-    const term = presetMap[mode] || "";
-    setSearchTerm(term);
-    if (mode) refetchSearch();
-  };
-
-  if (isLoading) return <p>Loading weekly plan...</p>;
+  /* ================= RENDER ================= */
 
   return (
-    <div className="flex gap-6">
-      {/* LEFT: Planner Grid */}
-      <div className="flex-1 space-y-4">
-        <div className="flex items-baseline justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Meal Planner</h1>
-            <p className="text-muted-foreground text-sm">
-              Week starting{" "}
-              <span className="font-medium">{weekStartStr}</span>
-            </p>
-          </div>
+    <div className="h-[calc(100vh-64px)] flex flex-col bg-background">
 
-          <div className="flex gap-3">
-            {/* Save plan button – theme aware */}
-            <button
-              onClick={() => saveMutation.mutate()}
-              className="px-4 py-2 rounded-full bg-green-500 text-primary-foreground text-sm font-semibold shadow-md hover:-translate-y-0.5 transition"
-            >
-              Save Plan
-            </button>
+      {/* HEADER */}
+      <header className="px-6 py-4 border-b bg-card flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold">Meal Planner</h1>
+          <p className="text-xs text-muted-foreground">Week of {weekStart}</p>
+        </div>
 
-            {/* Generate grocery list – theme aware outline */}
-            <button
-              onClick={() => groceryMutation.mutate()}
-              className="px-4 py-2 rounded-full bg-card text-card-foreground text-sm font-semibold border border-border shadow-sm hover:-translate-y-0.5 transition"
-            >
-              Generate Grocery List
-            </button>
+        <div className="flex items-center gap-6">
+          <CalorieRing value={totals.calories} target={DAILY_CAL_TARGET} />
+          <div className="text-sm text-muted-foreground">
+            Protein {Math.round(totals.protein)}g ·
+            Carbs {Math.round(totals.carbs)}g ·
+            Fat {Math.round(totals.fat)}g
           </div>
         </div>
 
-        {/* Planner Table */}
-        <div className="overflow-x-auto rounded-2xl bg-card shadow-sm border border-border">
-          <table className="min-w-full border-collapse">
-            <thead>
-              <tr className="bg-muted/60">
-                <th className="p-3 text-left text-xs font-semibold text-muted-foreground border-b border-border">
-                  Day
-                </th>
-                {MEALS.map((meal) => (
-                  <th
-                    key={meal}
-                    className="p-3 text-left text-xs font-semibold text-muted-foreground border-b border-border capitalize"
-                  >
-                    {meal}
-                  </th>
-                ))}
-              </tr>
-            </thead>
+        <div className="flex gap-2">
+          <button
+            onClick={() => saveMutation.mutate()}
+            className="px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => groceryMutation.mutate()}
+            className="px-4 py-2 rounded-full border text-sm"
+          >
+            Grocery
+          </button>
+        </div>
+      </header>
 
-            <tbody>
-              {DAYS.map((day) => (
-                <tr key={day} className="hover:bg-muted/40">
-                  <td className="p-3 text-sm font-semibold border-b border-border">
-                    {day}
-                  </td>
+      {/* BODY */}
+      <div className="flex flex-1 overflow-hidden">
 
-                  {MEALS.map((mealType) => {
-                    const slot = days[day][mealType];
-                    const isActive =
-                      activeSlot?.day === day &&
-                      activeSlot?.mealType === mealType;
-
-                    return (
-                      <td
-                        key={mealType}
-                        className="p-3 border-b border-border align-top cursor-pointer"
-                        onClick={() => setActiveSlot({ day, mealType })}
-                      >
-                        <div
-                          className={`relative rounded-2xl border transition ${
-                            slot
-                              ? "bg-card shadow-sm hover:shadow-lg"
-                              : "border-dashed border-border bg-background/40 hover:bg-background/70"
-                          } ${isActive ? "ring-2 ring-primary/80" : ""}`}
-                        >
-                          {slot ? (
-                            <div className="flex items-center gap-3 p-3">
-                              <img
-                                src={slot.thumbnail}
-                                alt={slot.name}
-                                className="w-12 h-12 rounded-xl object-cover"
-                              />
-
-                              <div className="flex-1">
-                                <p className="text-sm font-semibold truncate">
-                                  {slot.name}
-                                </p>
-                                <p className="text-xs text-muted-foreground capitalize">
-                                  {mealType}
-                                </p>
-                              </div>
-
-                              <button
-                                className="absolute top-2 right-2 bg-card text-card-foreground rounded-full w-7 h-7 flex items-center justify-center text-xs shadow hover:bg-destructive/10"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleClearSlot(day, mealType);
-                                }}
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center p-6">
-                              <span className="text-xs text-muted-foreground">
-                                + Add meal
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })}
+        {/* LEFT: TABLE */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="rounded-2xl bg-card border overflow-hidden">
+            <table className="w-full border-collapse">
+              <thead className="bg-muted/60">
+                <tr>
+                  <th className="p-3 text-left text-xs">Day</th>
+                  {MEALS.map((m) => (
+                    <th key={m} className="p-3 text-left text-xs capitalize">
+                      {m}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              </thead>
+              <tbody>
+                {DAYS.map((d) => (
+                  <tr key={d} className="hover:bg-muted/40">
+                    <td className="p-3 text-sm font-medium">{d}</td>
+                    {MEALS.map((m) => {
+                      const slot = days[d][m];
+                      return (
+                        <td
+                          key={m}
+                          className="p-3 cursor-pointer"
+                          onClick={() => setActiveSlot({ day: d, mealType: m })}
+                        >
+                          <div
+                            className={`h-[80px] rounded-xl border flex items-center gap-3 px-3 transition
+                            ${activeSlot?.day === d && activeSlot?.mealType === m
+                                ? "ring-2 ring-primary border-primary bg-primary/5"
+                                : slot
+                                  ? "bg-background hover:border-muted-foreground/30"
+                                  : "justify-center text-muted-foreground hover:border-muted-foreground/40"
+                              }`}
+                          >
+                            {slot ? (
+                              <>
+                                <img
+                                  src={slot.thumbnail}
+                                  alt={slot.name}
+                                  className="w-12 h-12 rounded-lg object-cover shrink-0"
+                                />
 
-      {/* RIGHT: Search & AI */}
-      <div className="w-80 space-y-4">
-        {/* AI suggestions card */}
-        <div className="rounded-2xl bg-card text-card-foreground shadow-sm border border-border p-4">
-          <h2 className="text-sm font-semibold mb-2">AI Suggestions</h2>
-          <p className="text-xs text-muted-foreground mb-3">
-            Choose a preset or search manually.
-          </p>
-
-          <div className="flex flex-wrap gap-2">
-            {["highProtein", "quick", "veg"].map((mode) => (
-              <button
-                key={mode}
-                onClick={() => handleAiPreset(mode)}
-                className={`
-                  px-3 py-1 rounded-full text-xs border border-border
-                  bg-card text-card-foreground hover:bg-muted
-                  ${
-                    aiMode === mode
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : ""
-                  }
-                `}
-              >
-                {mode === "highProtein"
-                  ? "High protein"
-                  : mode === "quick"
-                  ? "Quick meals"
-                  : "Veg friendly"}
-              </button>
-            ))}
-
-            <button
-              onClick={() => handleAiPreset(null)}
-              className="px-3 py-1 rounded-full text-xs border border-border bg-card text-card-foreground hover:bg-muted"
-            >
-              Clear
-            </button>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium truncate">{slot.name}</p>
+                                  <p className="text-xs text-muted-foreground capitalize">{m}</p>
+                                </div>
+                              </>
+                            ) : (
+                              <span className="text-xs">+ Add meal</span>
+                            )}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* SEARCH RESULTS */}
-        <div className="rounded-2xl bg-card text-card-foreground shadow-sm border border-border p-4 h-[520px] flex flex-col">
-          <h2 className="text-sm font-semibold mb-2">Search recipes</h2>
-
+        {/* RIGHT: SEARCH */}
+        <aside className="w-[360px] border-l bg-card p-4 flex flex-col">
           <input
-            type="text"
-            placeholder="Search meals (e.g. chicken curry)"
-            className="w-full border border-border rounded-full px-3 py-2 text-sm mb-3 outline-none bg-background text-foreground focus:ring-2 focus:ring-primary"
+            className="px-4 py-2 rounded-full bg-muted text-sm outline-none"
+            placeholder="Search meals…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
 
-          <div className="flex-1 overflow-y-auto space-y-3">
+          <div className="flex flex-wrap gap-2 mt-3">
+            {[
+              { label: "High protein", q: "chicken" },
+              { label: "Quick", q: "pasta" },
+              { label: "Veg", q: "vegetarian" },
+            ].map(({ label, q }) => (
+              <button
+                key={label}
+                onClick={() => setSearchTerm(q)}
+                className="px-3 py-1 rounded-full border text-xs"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 flex-1 overflow-y-auto rounded-xl border">
             {isSearching && (
-              <p className="text-xs text-muted-foreground">Searching…</p>
-            )}
-
-            {!isSearching && meals.length === 0 && searchTerm && (
-              <p className="text-xs text-muted-foreground">
-                No recipes found.
-              </p>
-            )}
-
-            {!searchTerm && (
-              <p className="text-xs text-muted-foreground">
-                Start typing or use an AI preset above.
-              </p>
+              <p className="p-3 text-xs text-muted-foreground">Searching…</p>
             )}
 
             {meals.map((meal) => (
               <button
                 key={meal.idMeal}
                 onClick={() => handleSelectRecipe(meal)}
-                className="w-full text-left rounded-2xl border border-border bg-card text-card-foreground shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition flex gap-3 p-2"
+                className="w-full flex items-center gap-3 p-3 hover:bg-muted border-b"
               >
                 <img
                   src={meal.strMealThumb}
                   alt={meal.strMeal}
-                  className="w-14 h-14 rounded-xl object-cover"
+                  className="w-10 h-10 rounded-lg object-cover"
                 />
-
-                <div className="flex-1">
-                  <p className="text-xs font-semibold truncate">
-                    {meal.strMeal}
-                  </p>
-
-                  {meal.strArea && (
-                    <p className="text-[10px] text-muted-foreground">
-                      {meal.strArea} • {meal.strCategory}
-                    </p>
-                  )}
-                </div>
+                <span className="text-sm truncate">{meal.strMeal}</span>
               </button>
             ))}
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );

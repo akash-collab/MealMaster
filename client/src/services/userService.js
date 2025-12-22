@@ -47,3 +47,24 @@ export const uploadAvatar = async (file) => {
   if (!res.ok) throw new Error("Failed to upload avatar");
   return res.json();
 };
+
+export const saveOnboarding = async (data) => {
+  const token = localStorage.getItem("auth-storage")
+    ? JSON.parse(localStorage.getItem("auth-storage")).state.accessToken
+    : null;
+
+  const res = await fetch(
+    `${import.meta.env.VITE_API_URL}/user/onboarding`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      credentials: "include",
+      body: JSON.stringify(data),
+    }
+  );
+
+  return res.json();
+};

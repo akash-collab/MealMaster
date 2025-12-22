@@ -1,120 +1,305 @@
-// server/routes/recipeRoutes.js
 import express from "express";
 import axios from "axios";
+import jwt from "jsonwebtoken";
 
 const router = express.Router();
+
 const MEALDB_BASE = "https://www.themealdb.com/api/json/v1/1";
 const DRINKDB_BASE = "https://www.thecocktaildb.com/api/json/v1/1";
 
-// 👉 curated IDs (MealDB)
-const CURATED_MEAL_IDS = [
-  "52771", // Arrabiata
-  "52807", // Butter Chicken
-  "52805", // Lamb Biryani
-  "52820", // Katsu Curry
-  "52855", // Pad Thai
-  "52844", // Lasagna
-  "52795", // Chicken Handi
-  "53065", // Sushi
-  "52834", // Tacos
-  "52982", // Carbonara
-  "52819", // Beef Fried Rice
-  "52796", // Teriyaki Chicken Casserole
+/* ================= CACHE ================= */
+let MEAL_CACHE = [];
+let DRINK_CACHE = [];
+let CACHE_READY = false;
+
+export async function warmUpCache() {
+  if (CACHE_READY) return;
+
+  console.log("🔥 Warming recipe cache...");
+
+  const [meals, drinks] = await Promise.all([
+    fetchAllMeals(),
+    fetchAllDrinks(),
+  ]);
+
+  MEAL_CACHE = meals;
+  DRINK_CACHE = drinks;
+  CACHE_READY = true;
+
+  console.log(
+    `✅ Cache ready: ${MEAL_CACHE.length} meals, ${DRINK_CACHE.length} drinks`
+  );
+}
+
+/* ================= HELPERS ================= */
+const hashCalories = (id) => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash % 500) + 300; // 300–800 kcal
+};
+
+const inferDiet = (item) => {
+  const category = item.strCategory?.toLowerCase() || "";
+  const name = item.strMeal?.toLowerCase() || "";
+
+  if (
+    category.includes("vegetarian") ||
+    category.includes("vegan") ||
+    name.includes("veg")
+  ) {
+    return "veg";
+  }
+
+  if (
+    category.includes("chicken") ||
+    category.includes("beef") ||
+    category.includes("lamb") ||
+    category.includes("pork") ||
+    category.includes("seafood")
+  ) {
+    return "keto";
+  }
+
+  return "non-veg";
+};
+
+const enrichRecipe = (item, type) => {
+  const id = type === "meal" ? item.idMeal : item.idDrink;
+  const calories = hashCalories(id);
+
+  return {
+    id,
+    type,
+    name: item.strMeal || item.strDrink,
+    thumbnail: item.strMealThumb || item.strDrinkThumb,
+    calories,
+    diet: type === "meal" ? inferDiet(item) : "drink",
+    createdAt: 1700000000000 + calories, // deterministic
+    popularity: calories % 1000,
+  };
+};
+
+/* ================= FETCH ALL MEALS ================= */
+const MEAL_CATEGORIES = [
+  "Beef",
+  "Chicken",
+  "Dessert",
+  "Lamb",
+  "Pasta",
+  "Pork",
+  "Seafood",
+  "Vegan",
+  "Vegetarian",
+  "Breakfast",
 ];
 
-// 👉 curated drink IDs (CocktailDB)
-const CURATED_DRINK_IDS = [
-  "11000",  // Mojito
-  "11007",  // Margarita
-  "12776",  // Iced Coffee
-  "17207",  // Pina Colada
-  "178366", // Long Island Iced Tea
-  "12770",  // Strawberry Shake
-];
+const fetchAllMeals = async () => {
+  const responses = await Promise.all(
+    MEAL_CATEGORIES.map((c) =>
+      axios.get(`${MEALDB_BASE}/filter.php?c=${c}`)
+    )
+  );
 
-// 🔹 Search meals
+  const map = new Map();
+
+  responses.forEach((r) => {
+    r.data.meals?.forEach((m) => {
+      if (!map.has(m.idMeal)) {
+        map.set(m.idMeal, enrichRecipe(m, "meal"));
+      }
+    });
+  });
+
+  return [...map.values()];
+};
+
+/* ================= FETCH ALL DRINKS ================= */
+const fetchAllDrinks = async () => {
+  const res = await axios.get(`${DRINKDB_BASE}/filter.php?c=Cocktail`);
+  return res.data.drinks?.map((d) => enrichRecipe(d, "drink")) || [];
+};
+
+/* ================= SEARCH (FAST, CACHED) ================= */
 router.get("/search", async (req, res) => {
   try {
-    const { q } = req.query;
-    const response = await axios.get(`${MEALDB_BASE}/search.php?s=${q}`);
-    res.json(response.data);
+    await warmUpCache();
+
+    const { q = "" } = req.query;
+    if (!q.trim()) return res.json({ meals: [] });
+
+    const qLower = q.toLowerCase();
+
+    const meals = MEAL_CACHE.filter((m) =>
+      m.name.toLowerCase().includes(qLower)
+    ).slice(0, 20); // limit results
+
+    res.json({
+      meals: meals.map((m) => ({
+        idMeal: m.id,
+        strMeal: m.name,
+        strMealThumb: m.thumbnail,
+      })),
+    });
   } catch (err) {
-    console.error("Meal search error:", err);
-    res.status(500).json({ message: "Error searching meals" });
+    console.error("Search error:", err);
+    res.status(500).json({ meals: [] });
   }
 });
 
-// 🔹 Curated meals (minimal fields)
-router.get("/curated", async (_req, res) => {
+/* ================= BROWSE ================= */
+router.get("/browse", async (req, res) => {
   try {
-    const promises = CURATED_MEAL_IDS.map((id) =>
-      axios.get(`${MEALDB_BASE}/lookup.php?i=${id}`)
-    );
+    await warmUpCache();
 
-    const results = await Promise.all(promises);
+    const {
+      type = "all",
+      diet,
+      sort = "latest",
+      q = "",
+      minCalories,
+      maxCalories,
+      page = 1,
+      limit = 9,
+    } = req.query;
 
-    const meals = results
-      .map((r) => r.data.meals?.[0])
-      .filter(Boolean)
-      .map((meal) => ({
-        id: meal.idMeal,
-        name: meal.strMeal,
-        thumbnail: meal.strMealThumb,
-      }));
+    let results = [];
 
-    res.json({ meals });
+    if (type === "all" || type === "meal") results.push(...MEAL_CACHE);
+    if (type === "all" || type === "drink") results.push(...DRINK_CACHE);
+
+    /* 🔍 SEARCH BY NAME */
+    if (q) {
+      const qLower = q.toLowerCase();
+      results = results.filter((r) =>
+        r.name.toLowerCase().includes(qLower)
+      );
+    }
+
+    /* 🥗 DIET FILTER (MEALS ONLY) */
+    if (diet) {
+      results = results.filter((r) => {
+        if (r.type === "drink") return true;
+        return r.diet === diet;
+      });
+    }
+
+    /* 🔥 CALORIE FILTER */
+    if (minCalories) {
+      results = results.filter((r) => r.calories >= Number(minCalories));
+    }
+
+    if (maxCalories) {
+      results = results.filter((r) => r.calories <= Number(maxCalories));
+    }
+
+    /* 🔀 SORT */
+    switch (sort) {
+      case "calories_asc":
+        results.sort((a, b) => a.calories - b.calories);
+        break;
+      case "calories_desc":
+        results.sort((a, b) => b.calories - a.calories);
+        break;
+      case "popularity":
+        results.sort((a, b) => b.popularity - a.popularity);
+        break;
+      default:
+        results.sort((a, b) => b.createdAt - a.createdAt);
+    }
+
+    /* 📄 PAGINATION */
+    const total = results.length;
+    const start = (page - 1) * limit;
+
+    res.json({
+      results: results.slice(start, start + Number(limit)),
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
-    console.error("Curated meals error:", err);
-    res.status(500).json({ message: "Error fetching curated meals" });
+    console.error("Browse recipes error:", err);
+    res.status(500).json({ message: "Failed to browse recipes" });
   }
 });
 
-// 🔹 Curated drinks (minimal fields)
-router.get("/drinks/curated", async (_req, res) => {
+/* ================= SUGGESTED ================= */
+router.get("/suggested", async (req, res) => {
+  await warmUpCache();
+
+  const { excludeId, limit = 3 } = req.query;
+
+  const pool = [...MEAL_CACHE, ...DRINK_CACHE]
+    .filter((r) => r.id !== excludeId)
+    .sort(() => 0.5 - Math.random());
+
+  res.json({ results: pool.slice(0, Number(limit)) });
+});
+
+/* ================= DETAILS ================= */
+router.get("/:id/details", async (req, res) => {
   try {
-    const promises = CURATED_DRINK_IDS.map((id) =>
-      axios.get(`${DRINKDB_BASE}/lookup.php?i=${id}`)
-    );
+    const { id } = req.params;
+    const { type = "meal" } = req.query;
 
-    const results = await Promise.all(promises);
+    const url =
+      type === "drink"
+        ? `${DRINKDB_BASE}/lookup.php?i=${id}`
+        : `${MEALDB_BASE}/lookup.php?i=${id}`;
 
-    const drinks = results
-      .map((r) => r.data.drinks?.[0])
-      .filter(Boolean)
-      .map((drink) => ({
-        id: drink.idDrink,
-        name: drink.strDrink,
-        thumbnail: drink.strDrinkThumb,
-      }));
+    const response = await axios.get(url);
+    const recipe =
+      type === "drink"
+        ? response.data.drinks?.[0]
+        : response.data.meals?.[0];
 
-    res.json({ drinks });
+    if (!recipe) {
+      return res.status(404).json({ recipe: null });
+    }
+
+    res.json({ recipe });
   } catch (err) {
-    console.error("Curated drinks error:", err);
-    res.status(500).json({ message: "Error fetching curated drinks" });
+    res.status(404).json({ recipe: null });
   }
 });
 
-// 🔹 Random drink suggestion (for details page)
-router.get("/drinks/random", async (_req, res) => {
+export const protect = (req, res, next) => {
+  let token;
+
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer ")
+  ) {
+    token = req.headers.authorization.split(" ")[1];
+  }
+
+  if (!token) {
+    return res.status(401).json({ message: "Not authorized, no token" });
+  }
+
   try {
-    const response = await axios.get(`${DRINKDB_BASE}/random.php`);
-    res.json(response.data);
-  } catch (err) {
-    console.error("Drink error:", err);
-    res.status(500).json({ message: "Error fetching drink suggestion" });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    console.error("Auth error:", error);
+    res.status(401).json({ message: "Not authorized, token invalid" });
   }
-});
+};
+router.get("/:id/nutrition", async (req, res) => {
+  const { id } = req.params;
 
-// 🔹 Meal details (keep LAST so it doesn't swallow other routes)
-router.get("/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    const response = await axios.get(`${MEALDB_BASE}/lookup.php?i=${id}`);
-    res.json(response.data);
-  } catch (err) {
-    console.error("Meal details error:", err);
-    res.status(500).json({ message: "Error fetching meal details" });
-  }
-});
+  const calories = hashCalories(id);
 
+  res.json({
+    nutrition: {
+      calories,
+      protein: Math.round(calories * 0.25 / 4),
+      carbs: Math.round(calories * 0.45 / 4),
+      fat: Math.round(calories * 0.30 / 9),
+    },
+  });
+});
 export default router;

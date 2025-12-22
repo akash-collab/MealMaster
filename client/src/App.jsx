@@ -1,9 +1,12 @@
-function App() {
-  return (
-    <div className="text-3xl font-bold text-center mt-10">
-      MealMaster App
-    </div>
-  );
-}
+import { useEffect } from "react";
+import { useAuthStore } from "./store/authStore";
 
-export default App;
+export default function App({ children }) {
+  const initAuth = useAuthStore((s) => s.initAuth);
+
+  useEffect(() => {
+    initAuth();
+  }, []);
+
+  return children;
+}

@@ -90,7 +90,7 @@ export const updateAvatar = async (req, res) => {
 
     res.json({
       message: "Avatar updated",
-      avatarUrl: `/api/user/avatar/${user._id}`, // URL to fetch image
+      avatarUrl: `/api/user/avatar/${user._id}`,
     });
   } catch (err) {
     console.error(err);
@@ -99,18 +99,24 @@ export const updateAvatar = async (req, res) => {
 };
 
 export const getAvatar = async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-
-    if (!user || !user.avatar || !user.avatar.data) {
-      return res.status(404).json({ message: "Avatar not found" });
-    }
-
-    res.set("Content-Type", user.avatar.contentType);
-    res.set("Cache-Control", "no-store");
-    return res.send(user.avatar.data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to load avatar" });
+  const user = await User.findById(req.params.id);
+  if (!user || !user.avatar?.data) {
+    return res.status(404).end();
   }
+
+  res.set("Content-Type", user.avatar.contentType);
+  res.send(user.avatar.data);
+};
+
+export const saveOnboarding = async (req, res) => {
+  const user = await User.findByIdAndUpdate(
+    req.userId,
+    {
+      ...req.body,
+      onboardingCompleted: true,
+    },
+    { new: true }
+  ).select("-password -refreshToken");
+
+  res.json({ user });
 };

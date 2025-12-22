@@ -67,9 +67,7 @@ export const googleCallback = async (req, res) => {
         email,
         oauthId: id,
         oauthProvider: "google",
-        avatar: picture
-          ? { data: Buffer.from(""), contentType: "" }
-          : undefined,
+        onboardingCompleted: false,
       });
     }
 

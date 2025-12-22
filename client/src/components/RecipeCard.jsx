@@ -12,7 +12,7 @@ export default function RecipeCard({ meal, onRemove, linkTo }) {
       <a href={linkTo}>
         {meal.thumbnail && (
           <img
-            src={meal.thumbnail}
+            src={meal.thumbnail || "/drink-placeholder.png"}
             alt={meal.name}
             className="w-full h-48 object-cover"
           />

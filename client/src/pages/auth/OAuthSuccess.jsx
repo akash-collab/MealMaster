@@ -1,36 +1,45 @@
 import { useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 
 export default function OAuthSuccess() {
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+
   const setAccessToken = useAuthStore((s) => s.setAccessToken);
   const setUser = useAuthStore((s) => s.setUser);
-  const [params] = useSearchParams();
 
   useEffect(() => {
     const token = params.get("accessToken");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
 
-    const finishLogin = async () => {
-      if (!token) return;
-
+    const completeOAuthLogin = async () => {
       setAccessToken(token);
-
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
-      });
-
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/auth/me`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
+        }
+      );
       const data = await res.json();
-      if (data?.user) {
-        setUser(data.user);
-        window.location.href = "/dashboard";
+      if (!data?.user) {
+        navigate("/login");
+        return;
+      }
+      setUser(data.user);
+      if (!data.user.onboardingCompleted) {
+        navigate("/register");
       } else {
-        window.location.href = "/login";
+        navigate("/dashboard");
       }
     };
 
-    finishLogin();
+    completeOAuthLogin();
   }, []);
 
-  return <div>Finishing login...</div>;
+  return <div className="p-6">Finishing Google login…</div>;
 }

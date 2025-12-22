@@ -5,7 +5,6 @@ import { useAuthStore } from "../../store/authStore";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import toast from "react-hot-toast";
-import AuthLayout from "../../layout/AuthLayout";
 
 export default function Login() {
   const setAuth = useAuthStore((s) => s.loginSuccess);
@@ -33,50 +32,62 @@ export default function Login() {
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="
-          w-full max-w-sm p-8 rounded-2xl shadow-lg border
-          bg-white dark:bg-neutral-900
+    /* FULLSCREEN BACKDROP */
+    <div
+      className="min-h-screen w-full flex items-center justify-center bg-cover bg-center relative"
+      style={{ backgroundImage: "url('/img-1.png')" }}
+    >
+      {/* Dark overlay */}
+      <div className="absolute inset-0 bg-black/50" />
+
+      {/* Login Card */}
+      <form
+        onSubmit={handleSubmit}
+        className="
+          relative z-10
+          w-full max-w-sm p-8 rounded-2xl shadow-xl border
+          bg-white/90 dark:bg-neutral-900/80
+          backdrop-blur-xl
           border-neutral-200 dark:border-neutral-700
           space-y-6
         "
-    >
-      <h2 className="text-3xl font-bold text-center">Welcome Back 👋</h2>
+      >
+        <h2 className="text-3xl font-bold text-center">Welcome Back 👋</h2>
 
-      <p className="text-sm text-center text-neutral-500 dark:text-neutral-400">
-        Log in to continue your journey
-      </p>
+        <p className="text-sm text-center text-neutral-600 dark:text-neutral-400">
+          Log in to continue your journey
+        </p>
 
-      <Input
-        type="email"
-        placeholder="Email address"
-        value={form.email}
-        onChange={(e) => setForm({ ...form, email: e.target.value })}
-      />
+        <Input
+          type="email"
+          placeholder="Email address"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
 
-      <Input
-        type="password"
-        placeholder="Password"
-        value={form.password}
-        onChange={(e) => setForm({ ...form, password: e.target.value })}
-      />
+        <Input
+          type="password"
+          placeholder="Password"
+          value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+        />
 
-      <Button type="submit" className="w-full h-10 text-base">
-        {mutation.isPending ? "Logging in…" : "Login"}
-      </Button>
+        <Button type="submit" className="w-full h-10 text-base">
+          {mutation.isPending ? "Logging in…" : "Login"}
+        </Button>
 
-      <div className="border-t pt-4 space-y-2">
-        <SocialLogin />
-      </div>
+        <div className="border-t pt-4 space-y-2">
+          <SocialLogin />
+        </div>
 
-      <p className="text-sm text-center text-neutral-600 dark:text-neutral-400">
-        Don't have an account?{" "}
-        <a href="/register" className="text-primary hover:underline">
-          Create one
-        </a>
-      </p>
-    </form>
+        <p className="text-sm text-center text-neutral-600 dark:text-neutral-400">
+          Don&apos;t have an account?{" "}
+          <a href="/register" className="text-primary hover:underline">
+            Create one
+          </a>
+        </p>
+      </form>
+    </div>
   );
 }
 
@@ -85,7 +96,9 @@ function SocialLogin() {
     <div className="space-y-2">
       <button
         type="button"
-        onClick={() => window.location.href = `${import.meta.env.VITE_API_URL}/auth/google`}
+        onClick={() =>
+          (window.location.href = `${import.meta.env.VITE_API_URL}/auth/google`)
+        }
         className="
           w-full border py-2.5 rounded-lg flex items-center justify-center gap-2
           border-neutral-300 dark:border-neutral-700

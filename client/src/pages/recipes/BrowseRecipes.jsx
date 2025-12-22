@@ -1,173 +1,168 @@
 // src/pages/recipes/BrowseRecipes.jsx
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  searchRecipes,
-  getCuratedMeals,
-  getCuratedDrinks,
-} from "../../services/recipeService";
+import { browseRecipes } from "../../services/recipeService";
 import RecipeCard from "../../components/RecipeCard";
-import { useSearchParams, useNavigate } from "react-router-dom";
 
 export default function BrowseRecipes() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialQuery = searchParams.get("q") || "";
-  const [query, setQuery] = useState(initialQuery);
-  const navigate = useNavigate();
-
-  // 🔍 search query
-  const {
-    data: searchData,
-    isLoading: isSearchLoading,
-  } = useQuery({
-    queryKey: ["recipes", query],
-    queryFn: () => searchRecipes(query),
-    enabled: query.trim().length > 0,
+  const [filters, setFilters] = useState({
+    type: "all",
+    diet: "",
+    sort: "latest",
+    minCalories: "",
+    maxCalories: "",
+    q: "",
+    page: 1,
+    limit: 9,
   });
 
-  // curated meals
-  const { data: curatedMealsData, isLoading: isCuratedMealsLoading } = useQuery({
-    queryKey: ["curated-meals"],
-    queryFn: getCuratedMeals,
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["browse-recipes", filters],
+    queryFn: () => browseRecipes(filters),
+    keepPreviousData: true,
   });
 
-  // curated drinks
-  const {
-    data: curatedDrinksData,
-    isLoading: isCuratedDrinksLoading,
-  } = useQuery({
-    queryKey: ["curated-drinks"],
-    queryFn: getCuratedDrinks,
-  });
+  const recipes = data?.results || [];
+  const totalPages = data?.totalPages || 1;
 
-  const meals = searchData?.meals || [];
-  const curatedMeals = curatedMealsData?.meals || [];
-  const curatedDrinks = curatedDrinksData?.drinks || [];
+  const updateFilter = (key, value) => {
+    setFilters((f) => ({
+      ...f,
+      [key]: value,
+      page: 1,
+    }));
+  };
 
-  const hasSearch = query.trim().length > 0;
-
-  const handleChange = (e) => {
-    const value = e.target.value;
-    setQuery(value);
-
-    if (value.trim()) setSearchParams({ q: value });
-    else setSearchParams({});
+  const jumpToPage = (value) => {
+    let pageNum = Number(value);
+    if (Number.isNaN(pageNum)) return;
+    pageNum = Math.max(1, Math.min(pageNum, totalPages));
+    setFilters((f) => ({ ...f, page: pageNum }));
   };
 
   return (
-    <div className="p-6 space-y-8 text-foreground">
+    <div className="h-[calc(100vh-64px)] flex flex-col p-4 text-foreground">
+      {/* ---------- HEADER ---------- */}
+      <div className="shrink-0 space-y-3">
+        <h1 className="text-2xl font-bold">Browse Recipes</h1>
 
-      <h1 className="text-3xl font-bold mb-2">Browse Recipes</h1>
+        {/* SEARCH BAR */}
+        <input
+          className="border rounded-lg px-3 py-2 bg-card col-span-2 md:col-span-5"
+          placeholder="Search by recipe name…"
+          value={filters.q}
+          onChange={(e) => updateFilter("q", e.target.value)}
+        />
 
-      {/* SEARCH INPUT */}
-      <input
-        type="text"
-        placeholder="Search meals (e.g. chicken, pasta, curry)"
-        value={query}
-        onChange={handleChange}
-        className="
-          w-full max-w-xl rounded-lg px-4 py-2 shadow-sm border border-border 
-          bg-card text-foreground
-          focus:outline-none focus:ring-2 focus:ring-primary
-        "
-      />
+        {/* FILTER BAR */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <select
+            className="border rounded-lg px-3 py-2 bg-card"
+            value={filters.type}
+            onChange={(e) => updateFilter("type", e.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="meal">Meals</option>
+            <option value="drink">Drinks</option>
+          </select>
 
-      {/* SEARCH RESULTS */}
-      {hasSearch && (
-        <div className="space-y-4">
-          {isSearchLoading && (
-            <p className="text-muted-foreground">Searching...</p>
-          )}
+          <select
+            className="border rounded-lg px-3 py-2 bg-card"
+            value={filters.diet}
+            onChange={(e) => updateFilter("diet", e.target.value)}
+          >
+            <option value="">All Diets</option>
+            <option value="veg">Veg</option>
+            <option value="keto">Keto</option>
+            <option value="non-veg">Non-Veg</option>
+          </select>
 
-          {!isSearchLoading && meals.length === 0 && (
-            <p classistaName="text-muted-foreground mt-2">
-              No meals found. Try another keyword.
-            </p>
-          )}
+          <select
+            className="border rounded-lg px-3 py-2 bg-card"
+            value={filters.sort}
+            onChange={(e) => updateFilter("sort", e.target.value)}
+          >
+            <option value="latest">Latest</option>
+            <option value="calories_asc">Calories ↑</option>
+            <option value="calories_desc">Calories ↓</option>
+            <option value="popularity">Popularity</option>
+          </select>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {meals.map((meal) => (
-              <RecipeCard
-                key={meal.idMeal}
-                meal={{
-                  recipeId: meal.idMeal,
-                  name: meal.strMeal,
-                  thumbnail: meal.strMealThumb,
-                }}
-                linkTo={`/dashboard/recipes/${meal.idMeal}?type=meal`}
-              />
-            ))}
-          </div>
+          <input
+            className="border rounded-lg px-3 py-2 bg-card"
+            placeholder="Min Calories"
+            value={filters.minCalories}
+            onChange={(e) => updateFilter("minCalories", e.target.value)}
+          />
+
+          <input
+            className="border rounded-lg px-3 py-2 bg-card"
+            placeholder="Max Calories"
+            value={filters.maxCalories}
+            onChange={(e) => updateFilter("maxCalories", e.target.value)}
+          />
         </div>
-      )}
+      </div>
 
-      {/* DEFAULT STATE */}
-      {!hasSearch && (
-        <>
-          {/* curated meals */}
-          <section className="space-y-3">
-            <h2 className="text-2xl font-semibold">Popular Recipes 🍽️</h2>
+      {/* ---------- CONTENT (SCROLLABLE) ---------- */}
+      <div className="flex-1 overflow-y-auto mt-4 pr-1">
+        {isLoading && <p className="text-muted-foreground">Loading recipes…</p>}
+        {isError && <p className="text-destructive">Failed to load recipes.</p>}
+        {!isLoading && recipes.length === 0 && (
+          <p className="text-muted-foreground">No recipes found.</p>
+        )}
 
-            {isCuratedMealsLoading && (
-              <p className="text-muted-foreground">Loading recipes...</p>
-            )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-6">
+          {recipes.map((item) => (
+            <RecipeCard
+              key={`${item.type}-${item.id}`}
+              meal={{
+                recipeId: item.id,
+                name: item.name,
+                thumbnail: item.thumbnail,
+              }}
+              linkTo={`/dashboard/recipes/${item.id}?type=${item.type}`}
+            />
+          ))}
+        </div>
+      </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {curatedMeals.map((meal) => (
-                <RecipeCard
-                  key={meal.id}
-                  meal={{
-                    recipeId: meal.id,
-                    name: meal.name,
-                    thumbnail: meal.thumbnail,
-                  }}
-                  linkTo={`/dashboard/recipes/${meal.id}?type=meal`}
-                />
-              ))}
-            </div>
-          </section>
+      {/* ---------- PAGINATION (FIXED FOOTER) ---------- */}
+      {totalPages > 1 && (
+        <div className="shrink-0 border-t pt-3 flex justify-center items-center gap-4">
+          <button
+            disabled={filters.page === 1}
+            onClick={() =>
+              setFilters((f) => ({ ...f, page: f.page - 1 }))
+            }
+            className="px-4 py-2 rounded-lg border disabled:opacity-50"
+          >
+            ⬅ Prev
+          </button>
 
-          {/* curated drinks */}
-          <section className="space-y-3">
-            <h2 className="text-2xl font-semibold mt-6">Popular Drinks 🥤</h2>
+          <input
+            type="number"
+            min={1}
+            max={totalPages}
+            value={filters.page}
+            onChange={(e) => jumpToPage(e.target.value)}
+            className="w-16 text-center rounded-lg border px-2 py-2 bg-card"
+          />
 
-            {isCuratedDrinksLoading && (
-              <p className="text-muted-foreground">Loading drinks...</p>
-            )}
+          <span className="text-sm text-muted-foreground">
+            / {totalPages}
+          </span>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {curatedDrinks.map((drink) => (
-                <div
-                  key={drink.id}
-                  onClick={() =>
-                    navigate(`/dashboard/recipes/${drink.id}?type=drink`)
-                  }
-                  className="
-                    cursor-pointer rounded-2xl overflow-hidden
-                    bg-card text-card-foreground
-                    shadow-md hover:shadow-xl hover:scale-[1.02]
-                    transition-all duration-200
-                  "
-                >
-                  <img
-                    src={drink.thumbnail}
-                    alt={drink.name}
-                    className="w-full h-48 object-cover"
-                  />
-
-                  <div className="p-4">
-                    <h3 className="font-semibold text-lg truncate text-foreground">
-                      {drink.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Cocktail • Tap to view
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </>
+          <button
+            disabled={filters.page === totalPages}
+            onClick={() =>
+              setFilters((f) => ({ ...f, page: f.page + 1 }))
+            }
+            className="px-4 py-2 rounded-lg border disabled:opacity-50"
+          >
+            Next ➡
+          </button>
+        </div>
       )}
     </div>
   );
