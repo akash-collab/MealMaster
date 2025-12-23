@@ -34,7 +34,7 @@ const router = createBrowserRouter([
       { index: true, element: <Launch /> },   
       { path: "login", element: <Login /> }, // <── REQUIRED PATH
       { path: "register", element: <Register /> },
-      { path: "/oauth-success", element: <OAuthSuccess /> },
+      { path: "oauth-success", element: <OAuthSuccess /> },
 
     ],
   },
