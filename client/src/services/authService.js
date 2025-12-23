@@ -23,6 +23,10 @@ export const loginUser = async (data) => {
 
   const text = await res.text();
 
+  if (!text) {
+    throw new Error("Empty response from server");
+  }
+
   try {
     return JSON.parse(text);
   } catch {
