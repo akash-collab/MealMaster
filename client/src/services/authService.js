@@ -17,13 +17,18 @@ export const loginUser = async (data) => {
   const res = await fetch(`${API_URL}/login`, {
     method: "POST",
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
 
-  return res.json();
+  const text = await res.text();
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    console.error("Non-JSON response:", text);
+    throw new Error("Server error");
+  }
 };
 
 export const fetchMe = async (token) => {
