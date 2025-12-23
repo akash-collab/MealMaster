@@ -325,7 +325,7 @@ export default function MealPlanner() {
                           onClick={() => setActiveSlot({ day: d, mealType: m })}
                         >
                           <div
-                            className={`h-[80px] rounded-xl border flex items-center gap-3 px-3 transition
+                            className={`h-20 rounded-xl border flex items-center gap-3 px-3 transition
                             ${activeSlot?.day === d && activeSlot?.mealType === m
                                 ? "ring-2 ring-primary border-primary bg-primary/5"
                                 : slot
