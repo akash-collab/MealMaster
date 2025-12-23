@@ -23,7 +23,7 @@ export const updateProfile = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (name) user.name = name;
-    if (email) user.email = email;
+    // if (email) user.email = email;
     if (dietPreferences) user.dietPreferences = dietPreferences;
     if (allergies) user.allergies = allergies;
     if (cuisinePreferences) user.cuisinePreferences = cuisinePreferences;

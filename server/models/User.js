@@ -32,9 +32,14 @@ const userSchema = new mongoose.Schema(
 
     favorites: [
       {
-        recipeId: String,
-        name: String,
-        thumbnail: String,
+        recipeId: { type: String, required: true },
+        name: { type: String, required: true },
+        thumbnail: { type: String, required: true },
+        type: {
+          type: String,
+          enum: ["meal", "drink"],
+          required: true,
+        },
       }
     ],
 

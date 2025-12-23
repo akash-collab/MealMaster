@@ -2,16 +2,17 @@ import User from "../models/User.js";
 
 export const addFavorite = async (req, res) => {
   try {
-    const { recipeId, name, thumbnail } = req.body;
+    const { recipeId, name, thumbnail, type } = req.body;
     const userId = req.userId;
 
     const user = await User.findById(userId);
 
-    // Prevent duplicates
-    const exists = user.favorites.some(f => f.recipeId === recipeId);
+    const exists = user.favorites.some(
+      (f) => f.recipeId === recipeId && f.type === type
+    );
     if (exists) return res.status(400).json({ message: "Already in favorites" });
 
-    user.favorites.push({ recipeId, name, thumbnail });
+    user.favorites.push({ recipeId, name, thumbnail, type });
     await user.save();
 
     res.json({ message: "Added to favorites", favorites: user.favorites });
