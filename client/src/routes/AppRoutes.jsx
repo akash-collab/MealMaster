@@ -2,6 +2,9 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import DashboardLayout from "../layout/DashboardLayout";
 
 import AuthLayout from "../layout/AuthLayout";
+
+import Launch from "../pages/launch/Launch";
+
 import Login from "../pages/auth/Login";
 import Register from "../pages/auth/Register";
 
@@ -28,7 +31,7 @@ const router = createBrowserRouter([
     path: "/",
     element: <AuthLayout />,        // <── wrap auth pages in AuthLayout
     children: [
-      { index: true, element: <Login /> },   // open on "/"
+      { index: true, element: <Launch /> },   
       { path: "login", element: <Login /> }, // <── REQUIRED PATH
       { path: "register", element: <Register /> },
       { path: "/oauth-success", element: <OAuthSuccess /> },

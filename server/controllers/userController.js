@@ -17,29 +17,38 @@ if (!fs.existsSync(uploadsPath)) {
 /* -------------------- EDIT PROFILE -------------------- */
 export const updateProfile = async (req, res) => {
   try {
-    const { name, email, dietPreferences, allergies, cuisinePreferences } = req.body;
+    const { name, dietPreferences, allergies, cuisinePreferences } = req.body;
 
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (name) user.name = name;
-    // if (email) user.email = email;
-    if (dietPreferences) user.dietPreferences = dietPreferences;
-    if (allergies) user.allergies = allergies;
-    if (cuisinePreferences) user.cuisinePreferences = cuisinePreferences;
+    if (typeof name === "string" && name.trim()) {
+      user.name = name.trim();
+    }
+
+    if (Array.isArray(dietPreferences)) {
+      user.dietPreferences = dietPreferences;
+    }
+    if (Array.isArray(allergies)) {
+      user.allergies = allergies;
+    }
+    if (Array.isArray(cuisinePreferences)) {
+      user.cuisinePreferences = cuisinePreferences;
+    }
 
     await user.save();
 
     res.json({
       message: "Profile updated successfully",
       user: {
-        id: user._id,
+        _id: user._id,
         name: user.name,
         email: user.email,
-        avatar: user.avatar,
+        hasAvatar: !!user.avatar?.data,
       },
     });
   } catch (err) {
+    console.error("Update profile error:", err);
     res.status(500).json({ message: "Failed to update profile" });
   }
 };

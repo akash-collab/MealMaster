@@ -35,7 +35,7 @@ export default function Login() {
     /* FULLSCREEN BACKDROP */
     <div
       className="min-h-screen w-full flex items-center justify-center bg-cover bg-center relative"
-      style={{ backgroundImage: "url('/img-1.png')" }}
+      style={{ backgroundImage: "url('/img-1.webp')" }}
     >
       {/* Dark overlay */}
       <div className="absolute inset-0 bg-black/50" />

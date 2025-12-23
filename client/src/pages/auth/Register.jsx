@@ -93,7 +93,7 @@ export default function Register() {
       {/* LEFT PANEL */}
       <div
         className="hidden md:flex relative items-center justify-center bg-cover bg-center"
-        style={{ backgroundImage: "url('/img-1.png')" }}
+        style={{ backgroundImage: "url('/img-1.webp')" }}
       >
         <div className="absolute inset-0 bg-black/40" />
         <div className="relative z-10 px-12 text-white">
