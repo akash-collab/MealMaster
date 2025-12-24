@@ -100,7 +100,7 @@ export default function Launch() {
           <img
             src="/hero.webp"
             alt="MealMaster AI Kitchen"
-            className="relative z-10 w-[90%] max-w-[720px] rounded-3xl shadow-2xl object-cover animate-[floatMain_12s_ease-in-out_infinite]"
+            className="relative z-10 w-[90%] max-w-180 rounded-3xl shadow-2xl object-cover animate-[floatMain_12s_ease-in-out_infinite]"
           />
         </section>
       </main>
