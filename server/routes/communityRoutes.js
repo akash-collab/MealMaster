@@ -12,14 +12,15 @@ import {
 import { protect } from "../middleware/authMiddleware.js";
 import { uploadImage } from "../middleware/uploadImage.js";
 import { getMyPosts } from "../controllers/mineController.js";
+import cache from "../middleware/cache.js";
 
 const router = express.Router();
 
 // Public feed + public single post
-router.get("/", getCommunityRecipes);
+router.get("/", cache("2 minutes"), getCommunityRecipes);
 router.get("/mine", protect, getMyPosts);
 router.get("/:id", getCommunityRecipe);
-router.get("/:id/comments", getComments);
+router.get("/:id/comments", cache("1 minute"), getComments);
 router.get("/:id/image", getCommunityImage);
 
 // Protected actions

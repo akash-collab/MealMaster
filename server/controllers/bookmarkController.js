@@ -26,7 +26,7 @@ export const getMyBookmarks = async (req, res) => {
   try {
     const userId = req.userId;
 
-    const bookmarks = await Bookmark.find({ userId })
+    const bookmarks = await Bookmark.find({ userId }).lean()
       .populate("postId")
       .sort({ createdAt: -1 });
 

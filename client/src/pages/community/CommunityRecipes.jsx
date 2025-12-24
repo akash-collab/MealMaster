@@ -13,6 +13,7 @@ import {
   reactToPost,
   addComment,
   fetchCommunityComments,
+  fetchCommunityPost,
 } from "../../services/communityService";
 import { useAuthStore } from "../../store/authStore";
 import { toggleBookmark } from "../../services/bookmarkService";
@@ -36,7 +37,9 @@ export default function CommunityRecipes() {
     queryKey: ["community-recipes", sort],
     queryFn: () => fetchCommunityRecipes(sort),
     keepPreviousData: true,
-    staleTime: 1000 * 10,
+    staleTime: 1000 * 60 * 2,     // 2 minutes
+    cacheTime: 1000 * 60 * 10,    // 10 minutes
+    refetchOnWindowFocus: false,
   });
 
   const recipes = feedData?.recipes || [];
@@ -125,7 +128,7 @@ export default function CommunityRecipes() {
 }
 
 /* ------------------------- CommunityPostCard ------------------------- */
-function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
+const CommunityPostCard = React.memo(function CommunityPostCard({ recipe, highlight, onOpenPost }) {
   const user = useAuthStore((s) => s.user);
   const isLoggedIn = !!user;
   const queryClient = useQueryClient();
@@ -140,7 +143,6 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
     mutationFn: ({ id, emoji }) => reactToPost({ id, emoji }),
     onSuccess: (data) => {
       if (data?.reactionCounts) setReactionCounts(data.reactionCounts);
-      queryClient.invalidateQueries(["community-recipes"]);
     },
     onError: (err) => toast.error(err?.message || "Failed to react"),
   });
@@ -154,8 +156,7 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
   const bookmarkMutation = useMutation({
     mutationFn: () => toggleBookmark(recipe._id),
     onSuccess: (data) => {
-      setBookmarked(data.isBookmarked);
-      queryClient.invalidateQueries(["community-recipes"]);
+      setBookmarked(data.bookmarked);
     },
     onError: () => toast.error("Failed to update bookmark"),
   });
@@ -188,6 +189,8 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
         <div role="button" onClick={() => onOpenPost(recipe)}>
           <img
             src={imgSrc}
+            loading="lazy"
+            decoding="async"
             alt={recipe.title}
             onError={(e) => (e.currentTarget.style.display = "none")}
             className={`w-full object-cover ${highlight ? "h-72" : "h-56"}`}
@@ -197,7 +200,7 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
 
       <div className="p-4 space-y-2">
         <h3 className="font-semibold text-lg line-clamp-1">{recipe.title}</h3>
-        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{recipe.description}</p>
+        <p className="text-sm text-muted-foreground line-clamp-2 mt-1 mb-3">{recipe.description}</p>
 
         {recipe.tags?.length > 0 && (
           <div className="flex flex-wrap gap-1">
@@ -211,7 +214,7 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
         )}
 
         {/* ACTIONS ROW — ADD SHARE LINK HERE */}
-        <div className="flex items-center justify-between text-sm mt-2">
+        <div className="flex items-center justify-between text-sm mb-2">
           <div className="flex items-center gap-5">
             <ReactionBar
               reactionCounts={reactionCounts}
@@ -260,7 +263,7 @@ function CommunityPostCard({ recipe, highlight = false, onOpenPost }) {
       </div>
     </article>
   );
-}
+});
 
 /* --------------- POST MODAL --------------- */
 function PostModal({ recipe, onClose }) {
@@ -273,13 +276,12 @@ function PostModal({ recipe, onClose }) {
 
   useQuery({
     queryKey: ["community-post", recipe._id],
-    queryFn: async () => {
-      const feed = await fetchCommunityRecipes("trending");
-      return feed.recipes?.find((r) => r._id === recipe._id) || recipe;
+    queryFn: () => fetchCommunityPost(recipe._id),
+    onSuccess: (res) => {
+      setServerData(res.recipe || recipe);
     },
-    onSuccess: (d) => setServerData(d),
-    staleTime: 15000,
-    
+    staleTime: 1000 * 60, // 1 minute
+    refetchOnWindowFocus: false,
   });
 
   const reactionCounts = serverData?.reactionCounts || recipe.reactionCounts;
@@ -288,6 +290,8 @@ function PostModal({ recipe, onClose }) {
   const { data: commentsData, isLoading: loadingComments } = useQuery({
     queryKey: ["community-comments", recipe._id],
     queryFn: () => fetchCommunityComments(recipe._id),
+    staleTime: 1000 * 30,
+    refetchOnWindowFocus: false,
   });
 
   const comments = commentsData?.comments || [];
@@ -297,7 +301,6 @@ function PostModal({ recipe, onClose }) {
     mutationFn: reactToPost,
     onSuccess: (res) => {
       setServerData((prev) => ({ ...prev, ...res }));
-      queryClient.invalidateQueries(["community-recipes"]);
     },
   });
 
@@ -305,7 +308,6 @@ function PostModal({ recipe, onClose }) {
     mutationFn: addComment,
     onSuccess: () => {
       queryClient.invalidateQueries(["community-comments", recipe._id]);
-      queryClient.invalidateQueries(["community-recipes"]);
     },
   });
 
@@ -315,20 +317,16 @@ function PostModal({ recipe, onClose }) {
     commentMutation.mutate({ id: recipe._id, text });
   };
 
-  useEffect(() => {
-    if (serverData?.isBookmarked !== undefined) {
-      setBookmarked(serverData.isBookmarked);
-    }
-  }, [serverData?.isBookmarked]);
+  // useEffect(() => {
+  //   if (serverData?.isBookmarked !== undefined) {
+  //     setBookmarked(serverData.isBookmarked);
+  //   }
+  // }, [serverData?.isBookmarked]);
 
   const bookmarkMutation = useMutation({
     mutationFn: () => toggleBookmark(recipe._id),
     onSuccess: (data) => {
-      // backend returns { isBookmarked: boolean }
-      setBookmarked(data.isBookmarked);
-
-      // update feed + modal queries
-      queryClient.invalidateQueries(["community-recipes"]);
+      setBookmarked(data.bookmarked);
       queryClient.invalidateQueries(["community-post", recipe._id]);
     },
   });
@@ -343,7 +341,8 @@ function PostModal({ recipe, onClose }) {
       <div className="bg-card text-card-foreground w-full max-w-6xl rounded-3xl grid md:grid-cols-2 overflow-hidden max-h-[90vh]">
         <div className="bg-black/5 flex items-center justify-center">
           {imgSrc && (
-            <img src={imgSrc} className="w-full h-full object-cover" alt={recipe.title} />
+            <img src={imgSrc} loading="lazy"
+              decoding="async" className="w-full h-full object-cover" alt={recipe.title} />
           )}
         </div>
 
@@ -400,7 +399,7 @@ function PostModal({ recipe, onClose }) {
           </div>
 
           {/* ACTIONS */}
-          <div className="p-6 border-t flex gap-6 items-center">
+          <div className="px-6 py-4 border-b flex gap-6 items-center">
             <ReactionBar
               reactionCounts={reactionCounts}
               userReaction={userReaction}
@@ -435,6 +434,9 @@ function PostModal({ recipe, onClose }) {
 
           {/* COMMENTS */}
           <div className="p-6 border-t max-h-56 overflow-y-auto">
+            <h3 className="text-sm font-semibold mb-3">
+              Comments ({commentsCount})
+            </h3>
             {loadingComments ? (
               <p className="text-sm text-muted-foreground">Loading comments…</p>
             ) : comments.length === 0 ? (
@@ -463,16 +465,12 @@ function PostModal({ recipe, onClose }) {
     </div>
   );
 }
-
-/* ------------------------- ReactionBar ------------------------- */
-/* ------------------ ReactionBar — FIXED stable hover ------------------ */
-/* ------------------ ReactionBar — robust hover + click support ------------------ */
-function ReactionBar({ reactionCounts = {}, userReaction = null, onSelectReaction }) {
+const ReactionBar = React.memo(function ReactionBar({ reactionCounts = {}, userReaction = null, onSelectReaction }) {
   // show top 3 emojis as summary (no change)
   const entries = Object.entries(reactionCounts || {});
   const top = entries.sort((a, b) => b[1] - a[1]).slice(0, 3);
   const topDisplay = top.map(([e]) => e).join(" ");
-
+  const total = entries.reduce((s, [, c]) => s + c, 0);
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
   const pickerRef = useRef(null);
@@ -596,13 +594,14 @@ function ReactionBar({ reactionCounts = {}, userReaction = null, onSelectReactio
         }}
         className="flex items-center gap-2 text-sm font-semibold"
       >
-        <span className="text-muted-foreground">
-          {topDisplay ? <span className="mr-2">{topDisplay}</span> : <span className="mr-2">🤍</span>}
+        <span className="text-muted-foreground flex items-center gap-2">
+          <span>{topDisplay || "🤍"}</span>
+          {total > 0 && <span className="text-xs font-semibold">{total}</span>}
         </span>
       </button>
     </div>
   );
-}
+});
 
 /* ------------------------- Inline Comment Form ------------------------- */
 function InlineCommentForm({ postId }) {
@@ -615,7 +614,6 @@ function InlineCommentForm({ postId }) {
     onSuccess: () => {
       setText("");
       queryClient.invalidateQueries(["community-comments", postId]);
-      queryClient.invalidateQueries(["community-recipes"]);
     },
   });
 
@@ -726,12 +724,15 @@ function CreateRecipeModal({ user, onClose, onSubmit, isSubmitting }) {
             {imageFile && (
               <img
                 src={URL.createObjectURL(imageFile)}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-56 object-cover rounded-2xl my-2"
               />
             )}
 
             {!imageFile && imageUrl && (
-              <img src={imageUrl} className="w-full h-56 object-cover rounded-2xl my-2" />
+              <img src={imageUrl} loading="lazy"
+                decoding="async" className="w-full h-56 object-cover rounded-2xl my-2" />
             )}
 
             <div className="flex gap-2">
