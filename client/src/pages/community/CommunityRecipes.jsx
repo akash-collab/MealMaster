@@ -1,12 +1,13 @@
 // client/src/pages/community/CommunityRecipes.jsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import {
   useQuery,
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-
+import * as ReactWindow from "react-window";
+const { VariableSizeList: List } = ReactWindow;
 import {
   fetchCommunityRecipes,
   createCommunityRecipe,
@@ -25,7 +26,7 @@ export default function CommunityRecipes() {
   const isLoggedIn = !!user;
   const queryClient = useQueryClient();
 
-  const [sort, setSort] = useState("trending");
+  const [sort, setSort] = useState("new");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [openPost, setOpenPost] = useState(null);
 
@@ -47,13 +48,52 @@ export default function CommunityRecipes() {
   /* CREATE POST */
   const createMutation = useMutation({
     mutationFn: createCommunityRecipe,
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success("Shared with community 🎉");
-      queryClient.invalidateQueries(["community-recipes"]);
+      queryClient.setQueryData(
+        ["community-recipes", sort],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            recipes: [data.recipe, ...old.recipes],
+          };
+        }
+      );
       setShowCreateModal(false);
     },
     onError: () => toast.error("Failed to share recipe"),
   });
+
+  // REACT mutation (shared)
+  const reactMutation = useMutation({
+    mutationFn: reactToPost,
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(
+        ["community-recipes", sort],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            recipes: old.recipes.map((r) =>
+              r._id === variables.id
+                ? { ...r, reactionCounts: data.reactionCounts }
+                : r
+            ),
+          };
+        }
+      );
+    },
+  });
+
+  // BOOKMARK mutation (shared)
+  const bookmarkMutation = useMutation({
+    mutationFn: toggleBookmark,
+  });
+
+  const handleOpenPost = React.useCallback((post) => {
+    setOpenPost(post);
+  }, []);
 
   return (
     <div className="p-6 space-y-6">
@@ -83,21 +123,14 @@ export default function CommunityRecipes() {
       {isError && <p className="text-sm text-destructive">Failed to load community feed.</p>}
       {!isLoading && recipes.length === 0 && <p className="text-sm text-muted-foreground">No posts yet. Be the first to share one!</p>}
 
-      {/* Feed */}
-      {recipes.length > 0 && (
-        <div className="space-y-6">
-          <CommunityPostCard
-            recipe={recipes[0]}
-            highlight
-            onOpenPost={(r) => setOpenPost(r)}
-          />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {recipes.slice(1).map((r) => (
-              <CommunityPostCard key={r._id} recipe={r} onOpenPost={(p) => setOpenPost(p)} />
-            ))}
-          </div>
-        </div>
+      {recipes.length > 0 && (
+        <VirtualizedFeed
+          recipes={recipes}
+          onOpenPost={handleOpenPost}
+          reactMutation={reactMutation}
+          bookmarkMutation={bookmarkMutation}
+        />
       )}
 
       {/* Floating create button */}
@@ -127,39 +160,54 @@ export default function CommunityRecipes() {
   );
 }
 
+function VirtualizedFeed({ recipes, onOpenPost, reactMutation, bookmarkMutation }) {
+  const getItemSize = (index) => {
+    if (index === 0) return 460;
+    return 380;
+  };
+
+  const Row = ({ index, style }) => {
+    const recipe = recipes[index];
+
+    return (
+      <div style={style} className="p-2">
+        <CommunityPostCard
+          recipe={recipe}
+          highlight={index === 0}
+          onOpenPost={onOpenPost}
+          reactMutation={reactMutation}
+          bookmarkMutation={bookmarkMutation}
+        />
+      </div>
+    );
+  };
+
+  return (
+    <List
+      height={window.innerHeight - 220}
+      itemCount={recipes.length}
+      itemSize={getItemSize}
+      width="100%"
+    >
+      {Row}
+    </List>
+  );
+}
+
 /* ------------------------- CommunityPostCard ------------------------- */
-const CommunityPostCard = React.memo(function CommunityPostCard({ recipe, highlight, onOpenPost }) {
+const CommunityPostCard = React.memo(function CommunityPostCard({ recipe, highlight, onOpenPost, reactMutation, bookmarkMutation, }) {
   const user = useAuthStore((s) => s.user);
   const isLoggedIn = !!user;
-  const queryClient = useQueryClient();
   const [bookmarked, setBookmarked] = useState(recipe.isBookmarked || false);
-
-  const [reactionCounts, setReactionCounts] = useState(recipe.reactionCounts || {});
-  const totalReactions = Object.values(reactionCounts).reduce((s, v) => s + v, 0);
+  const reactionCounts = recipe.reactionCounts || {};
   const commentsCount = recipe.commentsCount ?? recipe.comments?.length ?? 0;
   const imgSrc = recipe.imageUrl || `${import.meta.env.VITE_API_URL}/community/${recipe._id}/image`;
 
-  const reactMutation = useMutation({
-    mutationFn: ({ id, emoji }) => reactToPost({ id, emoji }),
-    onSuccess: (data) => {
-      if (data?.reactionCounts) setReactionCounts(data.reactionCounts);
-    },
-    onError: (err) => toast.error(err?.message || "Failed to react"),
-  });
-
-  const handleSelectReaction = (e, emoji) => {
-    e.stopPropagation();
+  const handleSelectReaction = (emoji) => {
     if (!isLoggedIn) return toast("Login to react ❤️");
     reactMutation.mutate({ id: recipe._id, emoji });
   };
 
-  const bookmarkMutation = useMutation({
-    mutationFn: () => toggleBookmark(recipe._id),
-    onSuccess: (data) => {
-      setBookmarked(data.bookmarked);
-    },
-    onError: () => toast.error("Failed to update bookmark"),
-  });
   return (
     <article
       onClick={() => onOpenPost && onOpenPost(recipe)}
@@ -178,7 +226,9 @@ const CommunityPostCard = React.memo(function CommunityPostCard({ recipe, highli
         <button
           onClick={(e) => {
             e.stopPropagation();
-            bookmarkMutation.mutate();
+            bookmarkMutation.mutate(recipe._id, {
+              onSuccess: (data) => setBookmarked(data.bookmarked),
+            });
           }}
           className="text-xl hover:scale-110 transition"
         >
@@ -218,7 +268,7 @@ const CommunityPostCard = React.memo(function CommunityPostCard({ recipe, highli
           <div className="flex items-center gap-5">
             <ReactionBar
               reactionCounts={reactionCounts}
-              onSelectReaction={(emoji, ev) => handleSelectReaction(ev, emoji)}
+              onSelectReaction={handleSelectReaction}
               showCount
             />
 
@@ -259,7 +309,6 @@ const CommunityPostCard = React.memo(function CommunityPostCard({ recipe, highli
           </div>
         )}
 
-        <InlineCommentForm postId={recipe._id} />
       </div>
     </article>
   );
@@ -270,7 +319,7 @@ function PostModal({ recipe, onClose }) {
   const user = useAuthStore((s) => s.user);
   const isLoggedIn = !!user;
   const queryClient = useQueryClient();
-
+  const reactionCounts = recipe.reactionCounts || {};
   const [serverData, setServerData] = useState(null);
   const [bookmarked, setBookmarked] = useState(recipe.isBookmarked || false);
 
@@ -284,7 +333,6 @@ function PostModal({ recipe, onClose }) {
     refetchOnWindowFocus: false,
   });
 
-  const reactionCounts = serverData?.reactionCounts || recipe.reactionCounts;
   const userReaction = serverData?.userReaction;
 
   const { data: commentsData, isLoading: loadingComments } = useQuery({
@@ -300,7 +348,11 @@ function PostModal({ recipe, onClose }) {
   const reactMutation = useMutation({
     mutationFn: reactToPost,
     onSuccess: (res) => {
-      setServerData((prev) => ({ ...prev, ...res }));
+      setServerData((prev) => ({
+        ...prev,
+        reactionCounts: res.reactionCounts,
+        userReaction: res.userReaction,
+      }));
     },
   });
 
@@ -310,18 +362,6 @@ function PostModal({ recipe, onClose }) {
       queryClient.invalidateQueries(["community-comments", recipe._id]);
     },
   });
-
-  const submitComment = (text) => {
-    if (!isLoggedIn) return toast("Login to comment");
-    if (!text.trim()) return;
-    commentMutation.mutate({ id: recipe._id, text });
-  };
-
-  // useEffect(() => {
-  //   if (serverData?.isBookmarked !== undefined) {
-  //     setBookmarked(serverData.isBookmarked);
-  //   }
-  // }, [serverData?.isBookmarked]);
 
   const bookmarkMutation = useMutation({
     mutationFn: () => toggleBookmark(recipe._id),
@@ -424,7 +464,9 @@ function PostModal({ recipe, onClose }) {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                bookmarkMutation.mutate();
+                bookmarkMutation.mutate(recipe._id, {
+                  onSuccess: (data) => setBookmarked(data.bookmarked),
+                });
               }}
               className="text-xl hover:scale-110 transition"
             >
@@ -465,118 +507,29 @@ function PostModal({ recipe, onClose }) {
     </div>
   );
 }
-const ReactionBar = React.memo(function ReactionBar({ reactionCounts = {}, userReaction = null, onSelectReaction }) {
-  // show top 3 emojis as summary (no change)
+const ReactionBar = React.memo(function ReactionBar({ reactionCounts = {}, onSelectReaction }) {
   const entries = Object.entries(reactionCounts || {});
   const top = entries.sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const topDisplay = top.map(([e]) => e).join(" ");
   const total = entries.reduce((s, [, c]) => s + c, 0);
   const [open, setOpen] = useState(false);
-  const containerRef = useRef(null);
-  const pickerRef = useRef(null);
-
-  // store last mouse position so we can check where the pointer actually is
-  const lastPos = useRef({ x: 0, y: 0 });
-  const closeTimeout = useRef(null);
-
-  useEffect(() => {
-    const onMove = (e) => {
-      lastPos.current = { x: e.clientX, y: e.clientY };
-    };
-    if (open) {
-      window.addEventListener("mousemove", onMove);
-    }
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-    };
-  }, [open]);
-
-  // helper: is the last pointer location inside the given element?
-  const pointerInside = (el) => {
-    if (!el) return false;
-    const { x, y } = lastPos.current;
-    const rect = el.getBoundingClientRect();
-    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-  };
-
-  const clearClose = () => {
-    if (closeTimeout.current) {
-      clearTimeout(closeTimeout.current);
-      closeTimeout.current = null;
-    }
-  };
-
-  const scheduleClose = () => {
-    clearClose();
-    // small delay to allow pointer to move from trigger -> picker without flicker
-    closeTimeout.current = setTimeout(() => {
-      // if pointer is inside either the container or the picker, don't close
-      if (
-        pointerInside(containerRef.current) ||
-        pointerInside(pickerRef.current)
-      ) {
-        // still inside, keep open
-        return;
-      }
-      setOpen(false);
-    }, 180);
-  };
-
-  useEffect(() => {
-    // cleanup on unmount
-    return () => {
-      clearClose();
-    };
-  }, []);
 
   return (
     <div
-      ref={containerRef}
       className="relative inline-flex items-center"
-      // open immediately on hover/focus
-      onMouseEnter={() => {
-        clearClose();
-        setOpen(true);
-      }}
-      onFocus={() => {
-        clearClose();
-        setOpen(true);
-      }}
-      // schedule close when leaving the trigger area — actual close checks pointer position
-      onMouseLeave={() => {
-        scheduleClose();
-      }}
-      onBlur={() => {
-        scheduleClose();
-      }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
     >
-      {/* EMOJI PICKER */}
       {open && (
-        <div
-          ref={pickerRef}
-          className="absolute -top-14 left-0 z-50 flex gap-2 px-3 py-2 rounded-full bg-card border border-border shadow-lg"
-          // keep open while hovering the picker itself
-          onMouseEnter={() => {
-            clearClose();
-            setOpen(true);
-          }}
-          onMouseLeave={() => {
-            scheduleClose();
-          }}
-        >
+        <div className="absolute -top-14 left-0 z-50 flex gap-2 px-3 py-2 rounded-full bg-card border shadow-lg">
           {EMOJI_OPTIONS.map((emoji) => (
             <button
               key={emoji}
-              type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                // call handler
                 onSelectReaction?.(emoji);
-                // keep picker open briefly so user sees the action; then close
-                clearClose();
-                closeTimeout.current = setTimeout(() => setOpen(false), 250);
+                setOpen(false);
               }}
-              className="text-xl px-1 py-0 rounded hover:scale-110 transition"
+              className="text-xl hover:scale-110"
             >
               {emoji}
             </button>
@@ -584,59 +537,20 @@ const ReactionBar = React.memo(function ReactionBar({ reactionCounts = {}, userR
         </div>
       )}
 
-      {/* MAIN BUTTON (click toggles on small screens, still opens picker on desktop hover) */}
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          // toggle for touch users
           setOpen((o) => !o);
         }}
         className="flex items-center gap-2 text-sm font-semibold"
       >
-        <span className="text-muted-foreground flex items-center gap-2">
-          <span>{topDisplay || "🤍"}</span>
-          {total > 0 && <span className="text-xs font-semibold">{total}</span>}
-        </span>
+        <span>{top.map(([e]) => e).join(" ") || "🤍"}</span>
+        {total > 0 && <span className="text-xs">{total}</span>}
       </button>
     </div>
   );
 });
-
-/* ------------------------- Inline Comment Form ------------------------- */
-function InlineCommentForm({ postId }) {
-  const [text, setText] = useState("");
-  const user = useAuthStore((s) => s.user);
-  const queryClient = useQueryClient();
-
-  const mutation = useMutation({
-    mutationFn: addComment,
-    onSuccess: () => {
-      setText("");
-      queryClient.invalidateQueries(["community-comments", postId]);
-    },
-  });
-
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!user) return toast("Login to comment");
-        if (!text.trim()) return;
-        mutation.mutate({ id: postId, text });
-      }}
-      className="flex items-center gap-2 mt-2"
-    >
-      <input
-        className="flex-1 rounded-full border px-3 py-2 text-sm"
-        placeholder="Add a comment…"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-      />
-      <button className="text-primary font-semibold">Post</button>
-    </form>
-  );
-}
 
 /* ------------------------- Modal Comment Input ------------------------- */
 function CommentInputForModal({ recipeId, onPosted }) {
