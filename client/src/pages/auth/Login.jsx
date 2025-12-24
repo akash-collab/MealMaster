@@ -8,6 +8,8 @@ import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 
 export default function Login() {
+          const navigate = useNavigate();
+
   const setAuth = useAuthStore((s) => s.loginSuccess);
 
   const [form, setForm] = useState({
@@ -20,7 +22,6 @@ export default function Login() {
     onSuccess: (data) => {
       if (data.user && data.accessToken) {
         setAuth(data.user, data.accessToken);
-        const navigate = useNavigate();
         navigate("/dashboard");
       } else {
         toast.error(data.message || "Login failed");
