@@ -5,11 +5,12 @@ import {
   getMealPlan,
   saveMealPlan,
 } from "../controllers/mealPlanController.js";
+import cache from "../middleware/cache.js";
 
 const router = express.Router();
 
 // weekStart is "YYYY-MM-DD"
-router.get("/:weekStart", protect, getMealPlan);
+router.get("/:weekStart", protect, cache("5 minutes"), getMealPlan);
 router.post("/:weekStart", protect, saveMealPlan);
 
 export default router;

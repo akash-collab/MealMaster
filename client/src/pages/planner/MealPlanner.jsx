@@ -111,7 +111,76 @@ function CalorieRing({ value, target }) {
     </div>
   );
 }
+const MealTable = React.memo(function MealTable({
+  DAYS,
+  MEALS,
+  days,
+  activeSlot,
+  setActiveSlot,
+}) {
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="rounded-2xl bg-card border overflow-hidden">
+        <table className="w-full border-collapse">
+          <thead className="bg-muted/60">
+            <tr>
+              <th className="p-3 text-left text-xs">Day</th>
+              {MEALS.map((m) => (
+                <th key={m} className="p-3 text-left text-xs capitalize">
+                  {m}
+                </th>
+              ))}
+            </tr>
+          </thead>
 
+          <tbody>
+            {DAYS.map((d) => (
+              <tr key={d} className="hover:bg-muted/40">
+                <td className="p-3 text-sm font-medium">{d}</td>
+
+                {MEALS.map((m) => {
+                  const slot = days[d][m];
+                  return (
+                    <td
+                      key={m}
+                      className="p-3 cursor-pointer"
+                      onClick={() => setActiveSlot({ day: d, mealType: m })}
+                    >
+                      <div className="h-20 rounded-xl border flex items-center gap-3 px-3">
+                        {slot ? (
+                          <>
+                            <img
+                              src={slot.thumbnail}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-12 h-12 rounded-lg object-cover"
+                            />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium truncate">
+                                {slot.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground capitalize">
+                                {m}
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            + Add meal
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+});
 /* ================= MAIN ================= */
 
 export default function MealPlanner() {
@@ -136,6 +205,9 @@ export default function MealPlanner() {
   const { data, isLoading } = useQuery({
     queryKey: ["mealplan", weekStart],
     queryFn: () => fetchMealPlan(weekStart),
+    staleTime: 1000 * 60 * 5,     // 5 minutes
+    cacheTime: 1000 * 60 * 30,    // 30 minutes
+    refetchOnWindowFocus: false,
   });
 
   useEffect(() => {
@@ -150,6 +222,8 @@ export default function MealPlanner() {
     queryKey: ["planner-search", debouncedSearch],
     queryFn: () => searchRecipes(debouncedSearch),
     enabled: debouncedSearch.length >= 3,
+    staleTime: 1000 * 60 * 10,
+    refetchOnWindowFocus: false,
   });
 
   const meals = searchData?.meals || [];
@@ -179,6 +253,8 @@ export default function MealPlanner() {
       );
       return Object.fromEntries(entries);
     },
+    staleTime: 1000 * 60 * 60,   // 1 hour
+    cacheTime: 1000 * 60 * 60 * 6,
   });
 
   const totals = useMemo(() => {
@@ -204,11 +280,15 @@ export default function MealPlanner() {
 
   const saveMutation = useMutation({
     mutationFn: () => saveMealPlan(weekStart, days),
-    onSuccess: () => toast.success("Meal plan saved ✅"),
+    onSuccess: () => {
+      queryClient.invalidateQueries(["mealplan", weekStart]);
+      toast.success("Meal plan saved ✅")
+    },
   });
 
   const groceryMutation = useMutation({
     mutationFn: async () => {
+      await new Promise((r) => setTimeout(r, 0));
       const map = new Map();
       for (const d of DAYS) {
         for (const m of MEALS) {
@@ -298,70 +378,16 @@ export default function MealPlanner() {
       {/* BODY */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* LEFT: TABLE */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="rounded-2xl bg-card border overflow-hidden">
-            <table className="w-full border-collapse">
-              <thead className="bg-muted/60">
-                <tr>
-                  <th className="p-3 text-left text-xs">Day</th>
-                  {MEALS.map((m) => (
-                    <th key={m} className="p-3 text-left text-xs capitalize">
-                      {m}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {DAYS.map((d) => (
-                  <tr key={d} className="hover:bg-muted/40">
-                    <td className="p-3 text-sm font-medium">{d}</td>
-                    {MEALS.map((m) => {
-                      const slot = days[d][m];
-                      return (
-                        <td
-                          key={m}
-                          className="p-3 cursor-pointer"
-                          onClick={() => setActiveSlot({ day: d, mealType: m })}
-                        >
-                          <div
-                            className={`h-20 rounded-xl border flex items-center gap-3 px-3 transition
-                            ${activeSlot?.day === d && activeSlot?.mealType === m
-                                ? "ring-2 ring-primary border-primary bg-primary/5"
-                                : slot
-                                  ? "bg-background hover:border-muted-foreground/30"
-                                  : "justify-center text-muted-foreground hover:border-muted-foreground/40"
-                              }`}
-                          >
-                            {slot ? (
-                              <>
-                                <img
-                                  src={slot.thumbnail}
-                                  alt={slot.name}
-                                  className="w-12 h-12 rounded-lg object-cover shrink-0"
-                                />
-
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium truncate">{slot.name}</p>
-                                  <p className="text-xs text-muted-foreground capitalize">{m}</p>
-                                </div>
-                              </>
-                            ) : (
-                              <span className="text-xs">+ Add meal</span>
-                            )}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <MealTable
+          DAYS={DAYS}
+          MEALS={MEALS}
+          days={days}
+          activeSlot={activeSlot}
+          setActiveSlot={setActiveSlot}
+        />
 
         {/* RIGHT: SEARCH */}
-        <aside className="w-[360px] border-l bg-card p-4 flex flex-col">
+        <aside className="w-90 border-l bg-card p-4 flex flex-col">
           <input
             className="px-4 py-2 rounded-full bg-muted text-sm outline-none"
             placeholder="Search meals…"
@@ -398,6 +424,8 @@ export default function MealPlanner() {
               >
                 <img
                   src={meal.strMealThumb}
+                  loading="lazy"
+                  decoding="async"
                   alt={meal.strMeal}
                   className="w-10 h-10 rounded-lg object-cover"
                 />

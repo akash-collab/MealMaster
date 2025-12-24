@@ -1,6 +1,7 @@
 import express from "express";
 import axios from "axios";
 import jwt from "jsonwebtoken";
+import cache from "../middleware/cache.js";
 
 const router = express.Router();
 
@@ -288,7 +289,7 @@ export const protect = (req, res, next) => {
     res.status(401).json({ message: "Not authorized, token invalid" });
   }
 };
-router.get("/:id/nutrition", async (req, res) => {
+router.get("/:id/nutrition", cache("1 hour"), async (req, res) => {
   const { id } = req.params;
 
   const calories = hashCalories(id);

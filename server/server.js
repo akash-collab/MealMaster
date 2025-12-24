@@ -1,4 +1,5 @@
 import express from "express";
+import compression from "compression";
 import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
@@ -27,7 +28,7 @@ import { fileURLToPath } from "url";
 dotenv.config();
 
 const app = express();
-
+app.use(compression());
 // CORS
 app.use(
   cors({

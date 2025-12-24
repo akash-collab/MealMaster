@@ -13,7 +13,7 @@ export const getMealPlan = async (req, res) => {
     const plan = await MealPlan.findOne({
       user: userId,
       weekStart, 
-    });
+    }).lean();
 
     return res.json({ plan });
   } catch (err) {
