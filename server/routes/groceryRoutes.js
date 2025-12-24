@@ -5,10 +5,11 @@ import {
   getGroceryList,
   saveGroceryList,
 } from "../controllers/groceryController.js";
+import cache from "../middleware/cache.js";
 
 const router = express.Router();
 
-router.get("/", protect, getGroceryList);
+router.get("/", protect,cache("5 minutes"), getGroceryList);
 router.post("/", protect, saveGroceryList);
 
 export default router;

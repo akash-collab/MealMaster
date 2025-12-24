@@ -362,7 +362,7 @@ export default function MealPlanner() {
         <div className="flex gap-2">
           <button
             onClick={() => saveMutation.mutate()}
-            className="px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm"
+            className="px-4 py-2 rounded-full bg-green-500 text-primary-foreground text-sm"
           >
             Save
           </button>

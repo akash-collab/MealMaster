@@ -1,6 +1,6 @@
 // src/pages/grocery/GroceryList.jsx
-
-import { useEffect, useState } from "react";
+import React from "react";  
+import { useEffect, useState,useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchGroceryList, saveGroceryList } from "../../services/groceryService";
 
@@ -26,6 +26,9 @@ export default function GroceryList() {
   const { data, isLoading } = useQuery({
     queryKey: ["grocery-list"],
     queryFn: fetchGroceryList,
+    staleTime: 1000 * 60 * 5,
+    cacheTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
   });
 
   const [items, setItems] = useState([]);
@@ -49,12 +52,14 @@ export default function GroceryList() {
   }, [data]);
 
   // Group by categories
-  const grouped = items.reduce((acc, item) => {
-    const category = item.checked ? "Completed" : categorizeItem(item.name);
-    if (!acc[category]) acc[category] = [];
-    acc[category].push(item);
-    return acc;
-  }, {});
+  const grouped = useMemo(() => {
+    return items.reduce((acc, item) => {
+      const category = item.checked ? "Completed" : categorizeItem(item.name);
+      if (!acc[category]) acc[category] = [];
+      acc[category].push(item);
+      return acc;
+    }, {});
+  }, [items]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -65,9 +70,15 @@ export default function GroceryList() {
     onSuccess: () => queryClient.invalidateQueries(["grocery-list"]),
   });
 
+  let saveTimeout;
+
   const updateAndSave = (arr) => {
     setItems(arr);
-    saveMutation.mutate(arr);
+
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+      saveMutation.mutate(arr);
+    }, 500);
   };
 
   // Add item
@@ -120,6 +131,18 @@ export default function GroceryList() {
 
     updateAndSave(arrayMove(items, oldIndex, newIndex));
   };
+
+  const DragPreview = React.memo(({ item }) => {
+    if (!item) return null;
+    return (
+      <div className="p-4 rounded-2xl bg-card border shadow-xl text-sm">
+        <p className="font-semibold">{item.name}</p>
+        <p className="text-muted-foreground">
+          {item.quantity} {item.unit}
+        </p>
+      </div>
+    );
+  });
 
   if (isLoading) return <p className="text-muted-foreground p-6">Loading grocery list...</p>;
 
@@ -196,14 +219,7 @@ export default function GroceryList() {
         onDragEnd={onDragEnd}
       >
         <DragOverlay>
-          {activeItem && (
-            <div className="p-4 rounded-2xl bg-card border border-border shadow-xl text-sm">
-              <p className="font-semibold">{activeItem.name}</p>
-              <p className="text-muted-foreground">
-                {activeItem.quantity} {activeItem.unit}
-              </p>
-            </div>
-          )}
+          <DragPreview item={activeItem} />
         </DragOverlay>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -240,7 +256,7 @@ export default function GroceryList() {
                     {itemsInCategory.map((item) => (
                       <SortableItem key={item._id} id={item._id}>
                         <div className="flex items-center justify-between bg-card border border-border p-3 rounded-2xl shadow-sm hover:shadow-md transition">
-                          
+
                           <div className="flex items-center gap-3">
                             <input
                               type="checkbox"
@@ -253,9 +269,8 @@ export default function GroceryList() {
 
                             <div>
                               <p
-                                className={`text-sm font-semibold ${
-                                  item.checked ? "line-through text-muted-foreground" : ""
-                                }`}
+                                className={`text-sm font-semibold ${item.checked ? "line-through text-muted-foreground" : ""
+                                  }`}
                               >
                                 {item.name}
                               </p>

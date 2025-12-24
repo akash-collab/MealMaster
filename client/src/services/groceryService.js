@@ -15,13 +15,14 @@ export const fetchGroceryList = async () => {
   const res = await fetch(BASE_URL, {
     method: "GET",
     headers: authHeaders(),
+    cache: "no-store",
   });
 
   if (!res.ok) {
     throw new Error("Failed to fetch grocery list");
   }
 
-  return res.json(); // { list }
+  return res.json(); 
 };
 
 export const saveGroceryList = async (items) => {

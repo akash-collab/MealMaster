@@ -5,7 +5,7 @@ export const getGroceryList = async (req, res) => {
   try {
     const userId = req.userId;
 
-    let list = await GroceryList.findOne({ user: userId });
+    let list = await GroceryList.findOne({ user: userId }).lean();
 
     if (!list) {
       // Return an empty list if none exists yet
