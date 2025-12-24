@@ -234,3 +234,28 @@
   0%, 100% { transform: translateY(0px); }
   50% { transform: translateY(14px); }
 }
+
+.bar {
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: currentColor;
+  left: 0;
+  transition: all 0.3s ease;
+}
+
+.bar:nth-child(1) { top: 0; }
+.bar:nth-child(2) { top: 50%; transform: translateY(-50%); }
+.bar:nth-child(3) { bottom: 0; }
+
+.bar.open:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.bar.open:nth-child(2) {
+  opacity: 0;
+}
+
+.bar.open:nth-child(3) {
+  transform: rotate(-45deg) translate(5px, -5px);
+}
