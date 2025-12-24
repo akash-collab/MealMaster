@@ -127,7 +127,7 @@ export default function RecipeDetails() {
         <img
           src={thumb}
           alt={name}
-          className="w-full h-[320px] object-cover"
+          className="w-full h-80 object-cover"
         />
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">

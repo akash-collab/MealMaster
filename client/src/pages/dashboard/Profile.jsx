@@ -235,7 +235,7 @@ export default function Profile() {
   return (
     <div className="p-6 max-w-6xl mx-auto text-foreground space-y-10">
       {/* HEADERS */}
-      <div className="rounded-2xl bg-gradient-to-r from-slate-800 to-slate-700 p-6 text-white shadow-lg flex items-center gap-6">
+      <div className="rounded-2xl bg-linear-to-r from-slate-800 to-slate-700 p-6 text-white shadow-lg flex items-center gap-6">
         <div className="relative">
           <div className="w-24 h-24 rounded-full bg-white/8 flex items-center justify-center text-3xl font-extrabold overflow-hidden">
             {avatarSrc ? (
@@ -419,7 +419,7 @@ export default function Profile() {
 function StatCard({ label, value, gradient = "from-slate-600 to-slate-500" }) {
   return (
     <div className="rounded-2xl p-4 text-white shadow">
-      <div className={`rounded-lg p-4 bg-gradient-to-br ${gradient}`}>
+      <div className={`rounded-lg p-4 bg-linear-to-br ${gradient}`}>
         <div className="text-xs opacity-90">{label}</div>
         <div className="text-2xl font-bold mt-1">{value}</div>
       </div>

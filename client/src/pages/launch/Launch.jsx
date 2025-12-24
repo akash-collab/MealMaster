@@ -5,7 +5,7 @@ export default function Launch() {
     <div className="relative min-h-screen w-full bg-background text-foreground overflow-hidden">
 
       {/* ================= HEADER ================= */}
-      <header className="min-h-[80px] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 sm:px-10 py-3">
+      <header className="min-h-20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 sm:px-10 py-3">
         <div className="flex items-center gap-3">
           <img src="/logo.webp" alt="MealMaster" className="h-9 w-9" />
           <span className="text-lg font-semibold">MealMaster</span>

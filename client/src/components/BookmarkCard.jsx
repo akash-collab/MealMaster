@@ -70,7 +70,7 @@ export default function BookmarkCard({ bookmark }) {
       </Link>
 
       <div className="p-3">
-        <p className="font-semibold line-clamp-2 min-h-[2rem]">{bookmark.title || "Untitled post"}</p>
+        <p className="font-semibold line-clamp-2 min-h-8">{bookmark.title || "Untitled post"}</p>
       </div>
 
       <button
